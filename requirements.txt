@@ -1,4 +1,4 @@
 ops == 2.5.0 # Revert when https://github.com/canonical/operator/issues/984 is fixed.
 ops-lib-pgsql >= 1.4
-requests == 2.28.1
+requests == 2.31.0
 responses == 0.21.0

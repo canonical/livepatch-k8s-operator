@@ -3,8 +3,8 @@
 
 """Manager for handling charm state."""
 
-import json
 import functools
+import json
 
 
 def requires_state_setter(func):

@@ -25,6 +25,17 @@ exclude_dirs = ["/venv/"]
 [tool.bandit.assert_used]
 skips = ["*tests/*", "*_test.py", "*test_*.py"]
 
+# Testing tools configuration
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+log_cli_level = "INFO"
+
 # Linting tools configuration
 [tool.flake8]
 max-line-length = 120

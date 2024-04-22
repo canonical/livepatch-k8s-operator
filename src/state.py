@@ -4,6 +4,32 @@
 """Manager for handling charm state."""
 
 import json
+import functools
+
+
+def requires_state_setter(func):
+    """Wrap the function to run only on the leader when the stored state is ready."""
+
+    @functools.wraps(func)
+    def wrapper(self, event):
+        if self.unit.is_leader() and self._state.is_ready():
+            return func(self, event)
+        return None
+
+    return wrapper
+
+
+def requires_state(func):
+    """Wrap the function to run only when stored state is ready."""
+
+    @functools.wraps(func)
+    def wrapper(self, event):
+        if self._state.is_ready():
+            return func(self, event)
+        event.defer()
+        return None
+
+    return wrapper
 
 
 class State:

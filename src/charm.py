@@ -14,7 +14,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
-from ops.charm import CharmBase
+from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, WaitingStatus
 
@@ -423,7 +423,7 @@ class LivepatchCharm(CharmBase):
 
         self._update_workload_container_config(event)
 
-    def schema_upgrade_action(self, event):
+    def schema_upgrade_action(self, event: ActionEvent):
         """Run the schema upgrade action."""
         if not self._state.is_ready():
             event.defer()
@@ -481,7 +481,7 @@ class LivepatchCharm(CharmBase):
             LOGGER.error("Schema migration failed - executing migration failed")
             raise e
 
-    def schema_version_check_action(self, event):
+    def schema_version_check_action(self, event: ActionEvent):
         """Check schema version action."""
         if not self._state.is_ready():
             event.defer()
@@ -535,7 +535,7 @@ class LivepatchCharm(CharmBase):
                 return True
             raise e
 
-    def get_resource_token_action(self, event):
+    def get_resource_token_action(self, event: ActionEvent):
         """Retrieve the livepatch resource token from ua-contracts."""
         if not self.unit.is_leader():
             LOGGER.error("cannot fetch the resource token: unit is not the leader")

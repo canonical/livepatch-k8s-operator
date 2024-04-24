@@ -426,7 +426,7 @@ class LivepatchCharm(CharmBase):
     def schema_upgrade_action(self, event: ActionEvent):
         """Run the schema upgrade action."""
         if not self._state.is_ready():
-            event.defer()
+            # Note that action events are not deferrable, so we should just return.
             LOGGER.warning("State is not ready")
             return
 
@@ -484,7 +484,7 @@ class LivepatchCharm(CharmBase):
     def schema_version_check_action(self, event: ActionEvent):
         """Check schema version action."""
         if not self._state.is_ready():
-            event.defer()
+            # Note that action events are not deferrable, so we should just return.
             LOGGER.warning("State is not ready")
             return
 

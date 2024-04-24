@@ -6,6 +6,8 @@ on:
       artifact_id:
         type: string
         required: true
+        description: |
+          `artifact_id` of the uploaded OCI image.
 
 jobs:
   upload_charm:

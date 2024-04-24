@@ -1,3 +1,6 @@
+# This action is used to fetch the latest Livepatch server OCI image (from the
+# `canonical/livepatch-server` repo) and upload it with the charm.
+
 name: Upload charm
 
 on:

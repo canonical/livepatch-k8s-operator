@@ -499,8 +499,12 @@ class LivepatchCharm(CharmBase):
         if not container.can_connect():
             LOGGER.error("cannot connect to the schema update container")
             return
-        self.migration_is_required(container, db_uri)
-        return
+
+        try:
+            migration_required = self.migration_is_required(container, db_uri)
+            event.set_results({"migration-required": migration_required})
+        except Exception as e:
+            event.fail(f"schema version check failed: {e}")
 
     def migration_is_required(self, container, conn_str: str) -> bool:
         """Run a schema version check against the database."""

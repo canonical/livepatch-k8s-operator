@@ -67,13 +67,13 @@ def get_machine_token(contract_token: str, contracts_url=DEFAULT_CONTRACTS_URL, 
         "Content-Type": "application/json",
     }
     try:
-        response = requests.post(
-            url=f"{contracts_url}/v1/context/machines/token",
+        data = make_request(
+            "POST",
+            f"{contracts_url}/v1/context/machines/token",
             data=json.dumps(payload),
             headers=headers,
             timeout=60,
         )
-        data = response.json()
         return data.get("machineToken", "")
     except requests.exceptions.RequestException:
         return None
@@ -90,17 +90,31 @@ def get_resource_token(machine_token, contracts_url=DEFAULT_CONTRACTS_URL, proxi
 
     headers = {"Authorization": f"Bearer {machine_token}"}
     try:
-        req = requests.get(
-            url=f"{contracts_url}/v1/resources/{RESOURCE_NAME}/context/machines/livepatch-onprem",
+        data = make_request(
+            "GET",
+            f"{contracts_url}/v1/resources/{RESOURCE_NAME}/context/machines/livepatch-onprem",
             headers=headers,
             timeout=60,
         )
-        data = req.json()
         return data.get("resourceToken", "")
     except requests.exceptions.RequestException:
         return None
     except KeyError:
         return None
+
+
+def make_request(method: str, url: str, *args, **kwargs):
+    """
+    Wrap HTTP request calls to be safely patched when testing.
+
+    The signature of this function is the same as the `requests` library's
+    `request` function.
+
+    Note that we don't want to patch the entire `requests` library methods, since
+    it might be used by other dependencies used in this charm.
+    """
+    response = requests.request(method, url, *args, **kwargs)
+    return response.json()
 
 
 def get_system_information() -> dict:

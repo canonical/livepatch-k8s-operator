@@ -437,7 +437,7 @@ class LivepatchCharm(CharmBase):
             event.fail("schema migration failed: database connection not set/ready")
             return
         if not container.can_connect():
-            LOGGER.error("Cannot connect to the schema update container")
+            LOGGER.error("Cannot connect to the schema upgrade container")
             event.fail("schema migration failed: cannot connect to schema upgrade container")
             return
 

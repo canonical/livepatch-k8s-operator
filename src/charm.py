@@ -434,11 +434,17 @@ class LivepatchCharm(CharmBase):
         container = self.unit.get_container(SCHEMA_UPGRADE_CONTAINER)
         if not db_uri:
             LOGGER.error("DB connection string not set")
+            event.fail("schema migration failed: database connection not set/ready")
             return
         if not container.can_connect():
             LOGGER.error("Cannot connect to the schema update container")
+            event.fail("schema migration failed: cannot connect to schema upgrade container")
             return
-        self.schema_upgrade(container, db_uri)
+
+        try:
+            self.schema_upgrade(container, db_uri)
+        except Exception as e:
+            event.fail(f"schema migration failed: {e}")
 
     def schema_upgrade(self, container, conn_str):
         """

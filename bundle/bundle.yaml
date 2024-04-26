@@ -36,7 +36,7 @@ applications:
       patch-sync.enabled: true
       server.burst-limit: 500
       server.concurrency-limit: 50
-      server.is-hosted: true
+      server.is-hosted: false
       server.log-level: info
   ingress:
     charm: nginx-ingress-integrator

@@ -14,7 +14,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
-from ops.charm import CharmBase
+from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, WaitingStatus
 
@@ -423,10 +423,10 @@ class LivepatchCharm(CharmBase):
 
         self._update_workload_container_config(event)
 
-    def schema_upgrade_action(self, event):
+    def schema_upgrade_action(self, event: ActionEvent):
         """Run the schema upgrade action."""
         if not self._state.is_ready():
-            event.defer()
+            # Note that action events are not deferrable, so we should just return.
             LOGGER.warning("State is not ready")
             return
 
@@ -434,11 +434,17 @@ class LivepatchCharm(CharmBase):
         container = self.unit.get_container(SCHEMA_UPGRADE_CONTAINER)
         if not db_uri:
             LOGGER.error("DB connection string not set")
+            event.fail("schema migration failed: database connection not set/ready")
             return
         if not container.can_connect():
-            LOGGER.error("Cannot connect to the schema update container")
+            LOGGER.error("Cannot connect to the schema upgrade container")
+            event.fail("schema migration failed: cannot connect to schema upgrade container")
             return
-        self.schema_upgrade(container, db_uri)
+
+        try:
+            self.schema_upgrade(container, db_uri)
+        except Exception as e:
+            event.fail(f"schema migration failed: {e}")
 
     def schema_upgrade(self, container, conn_str):
         """
@@ -481,10 +487,10 @@ class LivepatchCharm(CharmBase):
             LOGGER.error("Schema migration failed - executing migration failed")
             raise e
 
-    def schema_version_check_action(self, event):
+    def schema_version_check_action(self, event: ActionEvent):
         """Check schema version action."""
         if not self._state.is_ready():
-            event.defer()
+            # Note that action events are not deferrable, so we should just return.
             LOGGER.warning("State is not ready")
             return
 
@@ -493,8 +499,12 @@ class LivepatchCharm(CharmBase):
         if not container.can_connect():
             LOGGER.error("cannot connect to the schema update container")
             return
-        self.migration_is_required(container, db_uri)
-        return
+
+        try:
+            migration_required = self.migration_is_required(container, db_uri)
+            event.set_results({"migration-required": migration_required})
+        except Exception as e:
+            event.fail(f"schema version check failed: {e}")
 
     def migration_is_required(self, container, conn_str: str) -> bool:
         """Run a schema version check against the database."""
@@ -535,7 +545,7 @@ class LivepatchCharm(CharmBase):
                 return True
             raise e
 
-    def get_resource_token_action(self, event):
+    def get_resource_token_action(self, event: ActionEvent):
         """Retrieve the livepatch resource token from ua-contracts."""
         if not self.unit.is_leader():
             LOGGER.error("cannot fetch the resource token: unit is not the leader")

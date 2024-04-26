@@ -6,6 +6,8 @@ header:
         Licensed under the Apache2.0. See LICENSE file in charm source for details.
     paths:
       - 'lib/**'
+    paths-ignore:
+      - 'lib/charms/grafana_k8s/v0/**'
     comment: on-failure
   - license:
       spdx-id: Apache-2.0

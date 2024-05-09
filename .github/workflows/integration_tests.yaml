@@ -11,6 +11,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # To speed up the tests, we build the charm with Charmcraft and put the
+      # `.charm` file in the repository root directory. Integration tests will
+      # pick up this file and avoid building it per test case.
+      - name: Install Charmcraft
+        run: sudo snap install charmcraft --classic
+      - name: Build charm
+        run: charmcraft pack
+
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:

@@ -61,11 +61,11 @@ resources:
   livepatch-server-image:
     type: oci-image
     description: OCI Image for Livepatch Server
-    upstream-source: livepatch-server:latest
+    upstream-source: ghcr.io/canonical/livepatch-server:v1.14.0
   livepatch-schema-upgrade-tool-image:
     type: oci-image
     description: OCI Image for Schema upgrade tool
-    upstream-source: livepatch-schema-tool:latest
+    upstream-source: ghcr.io/canonical/livepatch-schema-tool:v1.14.0
   # Temporary workaround until pebble can forward logs to Loki directly.
   promtail-bin:
     type: file

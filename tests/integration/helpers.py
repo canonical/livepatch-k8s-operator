@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 import yaml
-from ops.model import ActiveStatus, BlockedStatus
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ POSTGRESQL_CHANNEL = "14/stable"
 NGINX_INGRESS_CHARM_NAME = "nginx-ingress-integrator"
 ACTIVE_STATUS = ActiveStatus.name
 BLOCKED_STATUS = BlockedStatus.name
+WAITING_STATUS = WaitingStatus.name
 
 
 async def get_unit_url(ops_test: OpsTest, application, unit, port, protocol="http"):

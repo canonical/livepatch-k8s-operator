@@ -40,12 +40,11 @@ async def test_upgrade(ops_test: OpsTest):
     )
 
     logger.info("waiting for the upgraded unit to be ready")
-    async with ops_test.fast_forward():
-        await ops_test.model.wait_for_idle(
-            apps=[APP_NAME],
-            status=ACTIVE_STATUS,
-            timeout=600,
-        )
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status=ACTIVE_STATUS,
+        timeout=600,
+    )
 
     logger.info("Getting model status after upgrade")
     status = await ops_test.model.get_status()  # noqa: F821

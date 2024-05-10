@@ -33,7 +33,7 @@ async def get_unit_url(ops_test: OpsTest, application, unit, port, protocol="htt
     Returns:
         Unit URL of the form {protocol}://{address}:{port}
     """
-    # Sometimes get_unit_address returns a None, no clue why, so looping until it's not
+    # Sometimes get_unit_address returns a None, no clue why.
     url = await ops_test.model.applications[application].units[unit].get_public_address()
     return f"{protocol}://{url}:{port}"
 

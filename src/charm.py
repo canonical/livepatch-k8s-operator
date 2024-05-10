@@ -169,7 +169,7 @@ class LivepatchCharm(CharmBase):
         try:
             upgrade_required = self.migration_is_required(schema_container, dsn)
         except Exception as e:
-            LOGGER.error(f"Failed to determe if schema upgrade required: {e}")
+            LOGGER.error(f"Failed to determine if schema upgrade required: {e}")
 
         if upgrade_required:
             self.schema_upgrade(schema_container, dsn)

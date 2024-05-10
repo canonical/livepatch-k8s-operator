@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.usefixtures("deploy_current_stable")
-async def test_upgrade(self, ops_test: OpsTest):
+async def test_upgrade(ops_test: OpsTest):
     """Test upgrading from the current stable release works as expected."""
 
     logger.info("Getting model status")

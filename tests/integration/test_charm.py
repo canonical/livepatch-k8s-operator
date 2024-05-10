@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.usefixtures("deploy")
-async def test_application_is_up(self, ops_test: OpsTest):
+async def test_application_is_up(ops_test: OpsTest):
     """Test the app is up and running."""
 
     logger.info("Getting model status")

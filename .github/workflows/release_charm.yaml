@@ -1,3 +1,6 @@
+# This action is used to fetch the latest Livepatch server OCI image (from the
+# `canonical/livepatch-server` repo) and upload it with the charm.
+
 name: Upload charm
 
 on:
@@ -6,6 +9,8 @@ on:
       artifact_id:
         type: string
         required: true
+        description: |
+          `artifact_id` of the uploaded OCI image.
 
 jobs:
   upload_charm:

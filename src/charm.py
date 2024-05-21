@@ -359,6 +359,7 @@ class LivepatchCharm(CharmBase):
             return
         # If read only replicas are desired, these urls should be added to
         # the peer relation e.g. peer = `[c.uri for c in event.standbys]`
+        return
 
     # Database
 
@@ -602,7 +603,6 @@ class LivepatchCharm(CharmBase):
         else:
             LOGGER.info("workload container not ready - deferring")
             event.defer()
-            return
 
 
 if __name__ == "__main__":

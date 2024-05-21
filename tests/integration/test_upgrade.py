@@ -6,10 +6,9 @@ import logging
 
 import pytest
 import requests
-from pytest_operator.plugin import OpsTest
-
 from conftest import fetch_charm, get_charm_resources
 from helpers import ACTIVE_STATUS, APP_NAME
+from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 

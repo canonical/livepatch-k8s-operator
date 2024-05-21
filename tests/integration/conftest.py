@@ -6,9 +6,7 @@ import asyncio
 import logging
 
 import pytest
-from pytest_operator.plugin import OpsTest
 import pytest_asyncio
-
 from charm_utils import fetch_charm
 from helpers import (
     ACTIVE_STATUS,
@@ -21,6 +19,7 @@ from helpers import (
     get_unit_url,
     oci_image,
 )
+from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 

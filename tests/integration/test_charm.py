@@ -6,9 +6,8 @@ import logging
 
 import pytest
 import requests
-from pytest_operator.plugin import OpsTest
-
 from helpers import ACTIVE_STATUS, APP_NAME
+from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 

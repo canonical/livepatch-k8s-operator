@@ -4,10 +4,10 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import unittest
-from unittest.mock import patch, Mock
 from typing import List
-import yaml
+from unittest.mock import Mock, patch
 
+import yaml
 from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness

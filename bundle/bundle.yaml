@@ -1,0 +1,49 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+bundle: kubernetes
+name: canonical-livepatch-onprem
+summary: Livepatch machine on-prem deployment bundle.
+description: |
+  Livepatch on-prem allows use of canonical-livepatch in network
+  restricted environments and offers tools for fine grained control
+  of the rollout of patches.
+website: https://ubuntu.com/security/livepatch
+issues: https://bugs.launchpad.net/livepatch-onprem
+docs: https://discourse.ubuntu.com/t/ubuntu-livepatch-service/22723
+tags: [security]
+series: jammy
+applications:
+  postgresql:
+    charm: postgresql-k8s
+    channel: 14/candidate
+    series: jammy
+    scale: 1
+    trust: true
+  livepatch:
+    charm: canonical-livepatch-server-k8s
+    channel: latest/stable
+    series: jammy
+    scale: 1
+    options:
+      external_hostname: ""
+      auth.basic.enabled: true
+      contracts.enabled: false
+      patch-cache.cache-size: 128
+      patch-cache.cache-ttl: "1h"
+      patch-cache.enabled: true
+      patch-storage.type: postgres
+      patch-sync.enabled: true
+      server.burst-limit: 500
+      server.concurrency-limit: 50
+      server.is-hosted: false
+      server.log-level: info
+  ingress:
+    charm: nginx-ingress-integrator
+    scale: 1
+    series: focal
+    channel: latest/stable
+    trust: true
+relations:
+  - ["livepatch:database", "postgresql:database"]
+  - ["livepatch:ingress", "ingress:ingress"]

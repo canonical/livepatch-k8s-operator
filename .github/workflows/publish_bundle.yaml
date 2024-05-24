@@ -1,0 +1,26 @@
+name: Release Bundle
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "bundle/**"
+  workflow_dispatch:
+
+run-name: Release bundle by @${{ github.actor }}
+
+jobs:
+  upload-livepatch-operator-k8s-bundle:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+      - name: Upload Bundle
+        uses: canonical/charming-actions/upload-bundle@main
+        with:
+            credentials: "${{ secrets.CHARMCRAFT_AUTH }}"
+            bundle-path: ./bundle
+            github-token: "${{ secrets.GITHUB_TOKEN }}"
+            channel: "k8s/edge"
+            tag-prefix: "bundle"

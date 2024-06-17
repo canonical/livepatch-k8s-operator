@@ -49,7 +49,13 @@ juju integrate canonical-livepatch-server-k8s:log-proxy loki-k8s:logging
 
 ### Grafana dashboard (optional, provides)
 
-Livepatch provides observability dashboards on Grafana. For this purpose, there is an endpoint, named `grafana-dashboard`, which implements the `grafana_dashboard` interface and can be integrated with [Grafana](https://charmhub.io/grafana-k8s). Users can integrate other applications with this endpoint by using Juju as follows:
+Livepatch provides observability dashboards on Grafana. Users can monitor the status of the running Livepatch server via many metrics, including (but not limited to):
+- Rate of HTTP response status codes (e.g., 200, 404, or 403) for a range of percentile values.
+- Rate of incoming HTTP requests per second.
+- Database metrics (i.e., errors and response times).
+- UA Contracts service errors.
+
+For this purpose, there is an endpoint, named `grafana-dashboard`, which implements the `grafana_dashboard` interface and can be integrated with [Grafana](https://charmhub.io/grafana-k8s). Users can integrate other applications with this endpoint by using Juju as follows:
 
 ```sh
 juju integrate canonical-livepatch-server-k8s:grafana-dashboard grafana-k8s:grafana-dashboard

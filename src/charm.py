@@ -6,6 +6,7 @@
 
 """Livepatch k8s charm."""
 import typing as t
+from base64 import b64decode
 
 import pgsql
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
@@ -16,7 +17,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, ModelError, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, WaitingStatus
 
 import utils
 from constants import LOGGER, SCHEMA_UPGRADE_CONTAINER, WORKLOAD_CONTAINER
@@ -35,6 +36,8 @@ REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
 }
 ON_PREM_REQUIRED_SETTINGS: t.Dict[str, str] = {}
+# Template for storing trusted certificate in a file.
+TRUSTED_CA_FILENAME = "/usr/local/share/ca-certificates/trusted-contracts.ca.crt"
 
 
 class DeferError(Exception):
@@ -204,6 +207,13 @@ class LivepatchCharm(CharmBase):
             LOGGER.warning("State is not ready")
             return
 
+        workload_container = self.unit.get_container(WORKLOAD_CONTAINER)
+        if not workload_container.can_connect():
+            LOGGER.info("workload container not ready - deferring")
+            self.unit.status = WaitingStatus("Waiting to connect - workload container")
+            event.defer()
+            return
+
         # Quickly update logrotates config each workload update
         self._push_to_workload(LOGROTATE_CONFIG_PATH, self._get_logrotate_config(), event)
 
@@ -232,12 +242,6 @@ class LivepatchCharm(CharmBase):
                 LOGGER.warning(error_msg)
                 return
 
-        workload_container = self.unit.get_container(WORKLOAD_CONTAINER)
-        if not workload_container.can_connect():
-            LOGGER.info("workload container not ready - deferring")
-            self.unit.status = WaitingStatus("Waiting to connect - workload container")
-            event.defer()
-            return
         update_config_environment_layer = {
             "services": {
                 LIVEPATCH_SERVICE_NAME: {
@@ -258,11 +262,18 @@ class LivepatchCharm(CharmBase):
             },
         }
         layer_label = "livepatch"
+        force_restart = self._update_trusted_ca_certs(workload_container)
         workload_container.add_layer(layer_label, update_config_environment_layer, combine=True)
+        self._start_or_restart_service(workload_container, force_restart)
+
+    def _start_or_restart_service(self, workload_container, force_restart):
         if self._ready(workload_container):
             if workload_container.get_service(LIVEPATCH_SERVICE_NAME).is_running():
-                LOGGER.info("Replanning services")
-                workload_container.replan()
+                if force_restart:
+                    workload_container.restart(LIVEPATCH_SERVICE_NAME)
+                else:
+                    LOGGER.info("Replanning services")
+                    workload_container.replan()
             else:
                 LOGGER.info("Starting Livepatch services")
                 workload_container.start(LIVEPATCH_SERVICE_NAME)
@@ -603,6 +614,35 @@ class LivepatchCharm(CharmBase):
         else:
             LOGGER.info("workload container not ready - deferring")
             event.defer()
+
+    def _update_trusted_ca_certs(self, container: Container) -> bool:
+        """Update trusted CA certificates with the cert from configuration.
+
+        Livepatch needs to restart to use newly received certificates.
+
+        Args:
+            container (Container): The workload container, the caller must ensure that we can connect.
+
+        Returns:
+            bool: A boolean to indicate whether the workload service should be restarted.
+        """
+        if not self.config.get("contracts.ca"):
+            LOGGER.info("ca config not set")
+            return False
+
+        cert = b64decode(self.config.get("contracts.ca")).decode("utf8")
+        cert_hash = hash(cert)
+        if self._state.contract_cert_hash and cert_hash == self._state.contract_cert_hash:
+            return False
+
+        container.push(TRUSTED_CA_FILENAME, cert, make_dirs=True)
+        self._state.contract_cert_hash = cert_hash
+
+        stdout, stderr = container.exec(["update-ca-certificates", "--fresh"]).wait_output()
+        LOGGER.info("stdout update-ca-certificates: %s", stdout)
+        LOGGER.info("stderr update-ca-certificates: %s", stderr)
+
+        return True
 
 
 if __name__ == "__main__":

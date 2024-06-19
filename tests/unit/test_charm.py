@@ -18,6 +18,8 @@ from src.state import State
 APP_NAME = "canonical-livepatch-server-k8s"
 
 TEST_TOKEN = "test-token"  # nosec
+TEST_CA_CERT = "VGVzdCBDQSBDZXJ0Cg=="
+TEST_CA_CERT_1 = "TmV3IFRlc3QgQ0EgQ2VydAo="
 
 
 class MockOutput:
@@ -524,6 +526,47 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(
             self.harness.charm.unit.status.message, "✘ patch-sync token not set, run get-resource-token action"
         )
+
+    def test_config_ca_cert(self):
+        """Assure the contract.ca is pushed to the workload container."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+
+        container = self.harness.model.unit.get_container("livepatch")
+        self.harness.charm.on.livepatch_pebble_ready.emit(container)
+
+        self.harness.handle_exec("livepatch", [], result=0)
+        self.harness.update_config(
+            {
+                "contracts.ca": TEST_CA_CERT,
+            }
+        )
+        self.harness.charm.on.config_changed.emit()
+
+        # Emit the pebble-ready event for livepatch
+        self.harness.charm.on.livepatch_pebble_ready.emit(container)
+        # Ensure that the content looks sensible
+        root = self.harness.get_filesystem_root("livepatch")
+        cert = (root / "usr/local/share/ca-certificates/trusted-contracts.ca.crt").read_text()
+        self.assertEqual(cert, "Test CA Cert\n")
+
+        self.harness.update_config(
+            {
+                "contracts.ca": TEST_CA_CERT_1,
+            }
+        )
+        self.harness.charm.on.config_changed.emit()
+
+        # Emit the pebble-ready event for livepatch
+        self.harness.charm.on.livepatch_pebble_ready.emit(container)
+        # Ensure that the content looks sensible
+        root = self.harness.get_filesystem_root("livepatch")
+        cert = (root / "usr/local/share/ca-certificates/trusted-contracts.ca.crt").read_text()
+        self.assertEqual(cert, "New Test CA Cert\n")
 
     def test_logrotate_config_pushed(self):
         """Assure that logrotate config is pushed."""

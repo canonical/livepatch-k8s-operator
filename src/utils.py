@@ -7,6 +7,7 @@ import csv
 import json
 import os
 import platform
+import tempfile
 import typing as t
 
 import requests
@@ -41,7 +42,9 @@ def get_proxy_dict(cfg) -> t.Optional[dict]:
     return d
 
 
-def get_machine_token(contract_token: str, contracts_url=DEFAULT_CONTRACTS_URL, proxies=None) -> t.Optional[str]:
+def get_machine_token(
+    contract_token: str, contracts_url=DEFAULT_CONTRACTS_URL, proxies=None, ca_certificate=None
+) -> t.Optional[str]:
     """Retrieve a resource token for the livepatch-onprem resource."""
     if proxies is not None:
         os.environ["http_proxy"] = proxies.get("http_proxy", "")
@@ -66,22 +69,30 @@ def get_machine_token(contract_token: str, contracts_url=DEFAULT_CONTRACTS_URL, 
         "Authorization": f"Bearer {contract_token}",
         "Content-Type": "application/json",
     }
-    try:
-        data = make_request(
-            "POST",
-            f"{contracts_url}/v1/context/machines/token",
-            data=json.dumps(payload),
-            headers=headers,
-            timeout=60,
-        )
-        return data.get("machineToken", "")
-    except requests.exceptions.RequestException:
-        return None
-    except KeyError:
-        return None
+
+    with tempfile.NamedTemporaryFile(prefix="ca", suffix="cert", delete=False) as ca_tempfile:
+        ca_filename = None
+        if ca_certificate is not None:
+            ca_tempfile.write(ca_certificate)
+            ca_tempfile.close()
+            ca_filename = ca_tempfile.name
+        try:
+            data = make_request(
+                "POST",
+                f"{contracts_url}/v1/context/machines/token",
+                data=json.dumps(payload),
+                headers=headers,
+                timeout=60,
+                verify=ca_filename,
+            )
+            return data.get("machineToken", "")
+        except Exception:
+            return None
+        finally:
+            os.unlink(ca_tempfile.name)
 
 
-def get_resource_token(machine_token, contracts_url=DEFAULT_CONTRACTS_URL, proxies=None):
+def get_resource_token(machine_token, contracts_url=DEFAULT_CONTRACTS_URL, proxies=None, ca_certificate=None):
     """Retrieve a resource token for the livepatch-onprem resource."""
     if proxies is not None:
         os.environ["http_proxy"] = proxies.get("http_proxy", "")
@@ -89,18 +100,26 @@ def get_resource_token(machine_token, contracts_url=DEFAULT_CONTRACTS_URL, proxi
         os.environ["no_proxy"] = proxies.get("no_proxy", "")
 
     headers = {"Authorization": f"Bearer {machine_token}"}
-    try:
-        data = make_request(
-            "GET",
-            f"{contracts_url}/v1/resources/{RESOURCE_NAME}/context/machines/livepatch-onprem",
-            headers=headers,
-            timeout=60,
-        )
-        return data.get("resourceToken", "")
-    except requests.exceptions.RequestException:
-        return None
-    except KeyError:
-        return None
+    with tempfile.NamedTemporaryFile(prefix="ca", suffix="cert", delete=False) as ca_tempfile:
+        ca_filename = None
+        if ca_certificate is not None:
+            ca_tempfile.write(ca_certificate)
+            ca_tempfile.close()
+            ca_filename = ca_tempfile.name
+
+        try:
+            data = make_request(
+                "GET",
+                f"{contracts_url}/v1/resources/{RESOURCE_NAME}/context/machines/livepatch-onprem",
+                headers=headers,
+                timeout=60,
+                verify=ca_filename,
+            )
+            return data.get("resourceToken", "")
+        except Exception:
+            return None
+        finally:
+            os.unlink(ca_tempfile.name)
 
 
 def make_request(method: str, url: str, *args, **kwargs):

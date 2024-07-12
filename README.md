@@ -33,7 +33,7 @@ There is also an endpoint, named `database-legacy`, which can be used with Postg
 
 ### Ingress
 
-Livepatch provides an endpoint, named `ingress`, which can be integrated with ingress resources in K8s clusters, like [Traefik](https://charmhub.io/traefik-k8s). As an example, users can integrate other applications with this endpoint by using Juju as follows:
+Livepatch provides an endpoint, named `ingress`, which can be integrated with ingress resources in K8s clusters, like [Traefik](https://charmhub.io/traefik-k8s) or [Nginx](https://charmhub.io/nginx-ingress-integrator). As an example, users can integrate other applications with this endpoint by using Juju as follows:
 
 ```sh
 juju integrate canonical-livepatch-server-k8s:ingress traefik-k8s:ingress

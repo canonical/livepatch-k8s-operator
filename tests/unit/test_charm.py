@@ -4,7 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import unittest
-from typing import List
+from typing import Any, Dict, List, Union
 from unittest.mock import Mock, patch
 
 import yaml
@@ -46,7 +46,7 @@ def mock_exec(_, command, environment) -> MockOutput:
     return MockOutput("", "unexpected command")
 
 
-# pylint: disable=too-many-public-methods
+# pylint: disable=too-many-public-methods,too-many-lines
 class TestCharm(unittest.TestCase):
     """A wrapper class for charm unit tests."""
 
@@ -915,3 +915,214 @@ class TestCharm(unittest.TestCase):
         }
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | required_environment)
+
+    def test_pro_airgapped_server_relation__success(self):
+        """Test pro-airgapped-server relation."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+        self.harness.charm._state.resource_token = TEST_TOKEN
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                }
+            )
+
+            pro_rel_id = self.harness.add_relation("pro-airgapped-server", "pro-airgapped-server")
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/0")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/0",
+                {
+                    "scheme": "scheme",
+                    "hostname": "some.host.name",
+                    "port": "9999",
+                },
+            )
+
+        self._assert_environment_contains(
+            {
+                "LP_CONTRACTS_ENABLED": True,
+                "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
+            }
+        )
+
+    def test_pro_airgapped_server_relation__multiple_units(self):
+        """Test pro-airgapped-server relation when there are multiple units."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+        self.harness.charm._state.resource_token = TEST_TOKEN
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                }
+            )
+
+            pro_rel_id = self.harness.add_relation("pro-airgapped-server", "pro-airgapped-server")
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/0")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/0",
+                {
+                    "scheme": "scheme",
+                    "hostname": "first.host",
+                    "port": "9999",
+                },
+            )
+
+            self._assert_environment_contains(
+                {
+                    "LP_CONTRACTS_ENABLED": True,
+                    "LP_CONTRACTS_URL": "scheme://first.host:9999",
+                }
+            )
+
+            # Adding another unit of `pro-airgapped-server`, but this new unit should not
+            # affect the Livepatch server configuration.
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/1")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/1",
+                {
+                    "scheme": "scheme",
+                    "hostname": "second.host",
+                    "port": "9999",
+                },
+            )
+
+            self._assert_environment_contains(
+                {
+                    "LP_CONTRACTS_ENABLED": True,
+                    "LP_CONTRACTS_URL": "scheme://first.host:9999",
+                }
+            )
+
+    def test_pro_airgapped_server_relation__multiple_units_one_departs(self):
+        """Test pro-airgapped-server relation when one of the relation units departs but the other one not."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+        self.harness.charm._state.resource_token = TEST_TOKEN
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                }
+            )
+
+            pro_rel_id = self.harness.add_relation("pro-airgapped-server", "pro-airgapped-server")
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/0")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/0",
+                {
+                    "scheme": "scheme",
+                    "hostname": "first.host",
+                    "port": "9999",
+                },
+            )
+
+            self._assert_environment_contains(
+                {
+                    "LP_CONTRACTS_ENABLED": True,
+                    "LP_CONTRACTS_URL": "scheme://first.host:9999",
+                }
+            )
+
+            # Adding another unit of `pro-airgapped-server`, but this new unit should not
+            # affect the Livepatch server configuration.
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/1")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/1",
+                {
+                    "scheme": "scheme",
+                    "hostname": "second.host",
+                    "port": "9999",
+                },
+            )
+
+            self._assert_environment_contains(
+                {
+                    "LP_CONTRACTS_ENABLED": True,
+                    "LP_CONTRACTS_URL": "scheme://first.host:9999",
+                }
+            )
+
+            # Now we drop remove the first `pro-airgapped-server` unit. The charm should
+            # use the second unit address.
+            self.harness.remove_relation_unit(pro_rel_id, "pro-airgapped-server/0")
+
+            self._assert_environment_contains(
+                {
+                    "LP_CONTRACTS_ENABLED": True,
+                    "LP_CONTRACTS_URL": "scheme://second.host:9999",
+                }
+            )
+
+    def test_pro_airgapped_server_relation__relation_removed(self):
+        """Test when pro-airgapped-server is removed."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+        self.harness.charm._state.resource_token = TEST_TOKEN
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                }
+            )
+
+            pro_rel_id = self.harness.add_relation("pro-airgapped-server", "pro-airgapped-server")
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/0")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/0",
+                {
+                    "scheme": "scheme",
+                    "hostname": "first.host",
+                    "port": "9999",
+                },
+            )
+
+            self._assert_environment_contains(
+                {
+                    "LP_CONTRACTS_ENABLED": True,
+                    "LP_CONTRACTS_URL": "scheme://first.host:9999",
+                }
+            )
+
+            # Now we remove the relation. The plan should now point to the hosted contracts service.
+            self.harness.remove_relation(pro_rel_id)
+
+            self._assert_environment_contains(
+                {
+                    "LP_CONTRACTS_ENABLED": True,
+                    "LP_CONTRACTS_URL": "https://contracts.canonical.com",
+                }
+            )
+
+    def _assert_environment_contains(self, contains: Dict[str, Any], not_contains: Union[List[str], None] = None):
+        """Assert Pebble plan environment contains given key/value pairs."""
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")

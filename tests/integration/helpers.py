@@ -2,7 +2,9 @@
 # See LICENSE file for licensing details.
 
 import logging
+import uuid
 from pathlib import Path
+from typing import Literal, Union
 
 import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -14,10 +16,62 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 APP_NAME = METADATA["name"]
 POSTGRESQL_NAME = "postgresql-k8s"
 POSTGRESQL_CHANNEL = "14/stable"
+PRO_AIRGAPPED_SERVER_NAME = "pro-airgapped-server"
+PRO_AIRGAPPED_SERVER_CHANNEL = "latest/stable"
+PRO_AIRGAPPED_SERVER_ENDPOINT = "livepatch-server"
 NGINX_INGRESS_CHARM_NAME = "nginx-ingress-integrator"
 ACTIVE_STATUS = ActiveStatus.name
 BLOCKED_STATUS = BlockedStatus.name
 WAITING_STATUS = WaitingStatus.name
+
+
+# Unique instance ID to be used for safe naming of models.
+__INSTANCE_ID = uuid.uuid4().hex
+
+
+async def ensure_model(ops_test: OpsTest, cloud_name: str, cloud_type: Literal["k8s", "lxd"]) -> Union[str, None]:
+    """Get (or create) the model on the given cloud and return its name."""
+    model_name = f"livepatch-test-{cloud_name}-{__INSTANCE_ID[:4]}"
+    for _, v in ops_test.models.items():
+        if v.model_name == model_name:
+            return model_name
+
+    # Although `OpsTest.track_model` can create a new model, but it results in
+    # an authorization error when adding a model to a MicroK8s cloud. So, we
+    # have to use Juju client to create a model and then call `track_model` to
+    # make sure it'll be destroyed at the end of the test.
+    exit_code, stdout, stderr = await ops_test.juju("add-model", model_name, cloud_name)
+    if exit_code != 0:
+        logger.error(f"running `juju add-model` failed:\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")
+        raise RuntimeError("running `juju add-model` failed")
+    model = await ops_test.track_model(
+        alias=model_name,
+        model_name=model_name,
+        cloud_name=cloud_name,
+        use_existing=True,
+        keep=False,
+    )
+
+    # When adding a K8s cloud to a LXD controller, we need to update the
+    # workload storage parameter to a storage class defined in the K8s cluster,
+    # otherwise the model in unable to deploy charms. Check out these bug
+    # reports for more context:
+    #   - https://bugs.launchpad.net/juju/+bug/2031216
+    #   - https://bugs.launchpad.net/juju/+bug/2077426
+    if cloud_type == "k8s":
+        controller_cloud = await (await model.get_controller()).cloud()
+        if controller_cloud.cloud.type_ == "lxd":
+            # You can get a list of available storage classes on your MicroK8s
+            # cluster by:
+            #   microk8s kubectl get storageclass
+            exit_code, stdout, stderr = await ops_test.juju(
+                "model-config", "-m", model.name, "workload-storage=microk8s-hostpath"
+            )
+            if exit_code != 0:
+                logger.error(f"running `juju model-config` failed:\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")
+                raise RuntimeError("running `juju model-config` failed")
+
+    return model.name
 
 
 async def get_unit_url(ops_test: OpsTest, application, unit, port, protocol="http"):

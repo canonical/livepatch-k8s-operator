@@ -101,10 +101,10 @@ jobs:
       # including the controller we have just bootstrapped.
       - name: Tweak MicroK8s API address
         run: |
-          export address=$(yq '.clusters[0].cluster.server' <(microk8s.config)) && \
+          export address=$(sudo bash -c 'yq ".clusters[0].cluster.server" <(microk8s.config)') && \
           sudo bash -c 'yq ".clusters[0].cluster.server = \"$address\"" /var/snap/microk8s/current/credentials/client.config > /var/snap/microk8s/current/credentials/client.config' && \
           sudo snap restart microk8s && \
-          microk8s status --wait-ready
+          sudo microk8s status --wait-ready
       - name: Add MicroK8s cloud to LXD controller
         run: |
           juju add-cloud microk8s --controller localhost-localhost --credential microk8s && \

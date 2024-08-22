@@ -68,6 +68,14 @@ Users can integrate Livepatch server with Prometheus to have it scrape the metri
 juju integrate canonical-livepatch-server-k8s:metrics-endpoint prometheus-k8s:metrics-endpoint
 ```
 
+### Air-gapped Contracts (optional, requires)
+
+Livepatch can be optionally integrated with [`pro-airgapped-server`](https://charmhub.io/pro-airgapped-server) via the `pro-airgapped-server` endpoint. Note that since the `pro-airgapped-server` is a machine charm, a cross-model relation is needed. Assuming there is a SaaS named `pro-airgapped-server` in the model, the integration can be done by using this command:
+
+```sh
+juju integrate canonical-livepatch-server:pro-airgapped-server pro-airgapped-server
+```
+
 ## OCI Images
 
 This charm uses the following OCI images:

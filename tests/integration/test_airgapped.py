@@ -5,6 +5,7 @@
 import logging
 import uuid
 
+import pytest
 import requests
 from fixtures import deploy_package
 from helpers import (
@@ -20,6 +21,7 @@ from pytest_operator.plugin import OpsTest
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.asyncio
 async def test_airgapped_contracts_integration(ops_test: OpsTest):
     """
     Test the charm integrates with `pro-airgapped-server`.

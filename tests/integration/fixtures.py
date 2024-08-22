@@ -5,6 +5,7 @@
 import asyncio
 import logging
 
+import pytest
 from charm_utils import fetch_charm
 from helpers import (
     ACTIVE_STATUS,
@@ -23,6 +24,7 @@ from pytest_operator.plugin import OpsTest
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.asyncio
 async def deploy_package(ops_test: OpsTest, test_name: str, use_current_stable: bool = False):
     """
     Deploy the application and its dependencies.

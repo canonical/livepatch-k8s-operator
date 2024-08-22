@@ -4,6 +4,7 @@
 
 import logging
 
+import pytest
 import requests
 from fixtures import deploy_package
 from helpers import ACTIVE_STATUS, APP_NAME, ensure_model
@@ -12,6 +13,7 @@ from pytest_operator.plugin import OpsTest
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.asyncio
 async def test_application_is_up(ops_test: OpsTest):
     """Test the app is up and running."""
 

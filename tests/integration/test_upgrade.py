@@ -4,6 +4,7 @@
 
 import logging
 
+import pytest
 import requests
 from fixtures import deploy_package, fetch_charm, get_charm_resources
 from helpers import ACTIVE_STATUS, APP_NAME, ensure_model
@@ -12,6 +13,7 @@ from pytest_operator.plugin import OpsTest
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.asyncio
 async def test_upgrade(ops_test: OpsTest):
     """Test upgrading from the current stable release works as expected."""
 

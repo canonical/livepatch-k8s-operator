@@ -98,12 +98,12 @@ jobs:
           juju bootstrap localhost localhost-localhost
       # We need to change the MicroK8s API address from a localhost (127.0.0.1)
       # to a concrete IP address that is accessible by LXD containers/instances,
-      # including the controller we have just bootstrapped.
+      # including the controller we have just bootstrapped. Note that the output
+      # of the `microk8s.config` command is the content of the `client.config`
+      # file with the API address changed as we need.
       - name: Tweak MicroK8s API address
         run: |
-          export address=$(sudo bash -c 'yq ".clusters[0].cluster.server" <(microk8s.config)') && \
-          sudo bash -c 'yq ".clusters[0].cluster.server = \"$address\"" /var/snap/microk8s/current/credentials/client.config > /var/snap/microk8s/current/credentials/client.config' && \
-          sudo snap restart microk8s
+          sudo bash -c 'microk8s.config > /var/snap/microk8s/current/credentials/client.config'
       - name: Add MicroK8s cloud to LXD controller
         run: |
           juju add-cloud microk8s --controller localhost-localhost --credential microk8s

@@ -5,8 +5,6 @@
 import asyncio
 import logging
 
-import pytest
-import pytest_asyncio
 from charm_utils import fetch_charm
 from helpers import (
     ACTIVE_STATUS,
@@ -25,21 +23,7 @@ from pytest_operator.plugin import OpsTest
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.skip_if_deployed
-@pytest_asyncio.fixture(name="deploy", scope="module")
-async def deploy(ops_test: OpsTest):
-    """Build and deploy the app and its components."""
-    await deploy_package(ops_test)
-
-
-@pytest.mark.skip_if_deployed
-@pytest_asyncio.fixture(name="deploy_current_stable", scope="module")
-async def deploy_current_stable(ops_test: OpsTest):
-    """Deploy the current stable release of the charm."""
-    await deploy_package(ops_test, True)
-
-
-async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
+async def deploy_package(ops_test: OpsTest, test_name: str, use_current_stable: bool = False):
     """
     Deploy the application and its dependencies.
 
@@ -47,7 +31,7 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
                                charm in the current working directory)
     """
 
-    model_name = await ensure_model(ops_test, cloud_name="microk8s", cloud_type="k8s")
+    model_name = await ensure_model(test_name, ops_test, cloud_name="microk8s", cloud_type="k8s")
     with ops_test.model_context(model_name):
         jammy = "ubuntu@22.04"
         config = {

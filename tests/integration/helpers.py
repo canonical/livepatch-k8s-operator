@@ -29,9 +29,14 @@ WAITING_STATUS = WaitingStatus.name
 __INSTANCE_ID = uuid.uuid4().hex
 
 
-async def ensure_model(ops_test: OpsTest, cloud_name: str, cloud_type: Literal["k8s", "lxd"]) -> Union[str, None]:
+async def ensure_model(
+    test_name: str,
+    ops_test: OpsTest,
+    cloud_name: str,
+    cloud_type: Literal["k8s", "lxd"],
+) -> Union[str, None]:
     """Get (or create) the model on the given cloud and return its name."""
-    model_name = f"livepatch-test-{cloud_name}-{__INSTANCE_ID[:4]}"
+    model_name = f"livepatch-test-{test_name}-{cloud_name}-{__INSTANCE_ID[:4]}"
     for _, v in ops_test.models.items():
         if v.model_name == model_name:
             return model_name

@@ -3,7 +3,6 @@
 # See LICENSE file for licensing details.
 
 import logging
-import uuid
 
 import pytest
 import requests
@@ -104,7 +103,7 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
                 apps=[PRO_AIRGAPPED_SERVER_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600
             )
 
-            offer_name = f"offer-{uuid.uuid4().hex[0:4]}"
+            offer_name = "pro-airgapped-server-offer"
             logger.info("Creating application offer for cross-model relation: %s", offer_name)
             await ops_test.model.create_offer(
                 endpoint=PRO_AIRGAPPED_SERVER_ENDPOINT,

@@ -41,10 +41,10 @@ async def ensure_model(
         if v.model_name == model_name:
             return model_name
 
-    # Although `OpsTest.track_model` can create a new model, but it results in
-    # an authorization error when adding a model to a MicroK8s cloud. So, we
-    # have to use Juju client to create a model and then call `track_model` to
-    # make sure it'll be destroyed at the end of the test.
+    # Although `OpsTest.track_model` can create a new model, it results in an
+    # authorization error when adding a model to a MicroK8s cloud. So, we have
+    # to use Juju client to create a model and then call `track_model` to make
+    # sure it'll be destroyed at the end of the test.
     exit_code, stdout, stderr = await ops_test.juju("add-model", model_name, cloud_name)
     if exit_code != 0:
         logger.error(f"running `juju add-model` failed:\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")

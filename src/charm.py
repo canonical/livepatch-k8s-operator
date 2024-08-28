@@ -6,7 +6,7 @@
 
 """Livepatch k8s charm."""
 from base64 import b64decode
-from typing import Dict, Union
+from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
 
 import pgsql
@@ -447,7 +447,7 @@ class LivepatchCharm(CharmBase):
         """Handle pro-airgapped-server relation-departed event."""
         self._update_workload_container_config(event)
 
-    def _get_available_pro_airgapped_server_address(self, relation: Relation) -> Union[str, None]:
+    def _get_available_pro_airgapped_server_address(self, relation: Relation) -> Optional[str]:
         """
         Return the pro-airgapped-server address, if any, taken from related unit databags.
 
@@ -464,7 +464,7 @@ class LivepatchCharm(CharmBase):
                 return address
         return None
 
-    def _extract_pro_airgapped_server_address(self, data: RelationDataContent) -> Union[str, None]:
+    def _extract_pro_airgapped_server_address(self, data: RelationDataContent) -> Optional[str]:
         """
         Extract pro-airgapped-server address from given unit databag.
 

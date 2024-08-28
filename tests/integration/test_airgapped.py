@@ -150,6 +150,7 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
         url = f"http://{app_address}:8080/debug/status"
         logger.info("Querying app address: %s", url)
         r = requests.get(url, timeout=2.0)
-        logger.info(f"Output = {r.json()}")
         assert r.status_code == 200
-        assert r.json()["contracts"]["status"] == "OK"
+        body = r.json()
+        logger.info("Output = %s", body)
+        assert body["contracts"]["status"] == "OK"

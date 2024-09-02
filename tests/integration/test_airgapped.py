@@ -26,9 +26,12 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
     Test the charm integrates with `pro-airgapped-server`.
 
     Since the `pro-airgapped-server` charm has no K8s version, we need to deploy
-    it on a LXD cloud, and then use a cross-model relation (CMR) to integrate it
-    with the Livepatch charm. Note that for a CMR to work, both models should be
-    on the same controller.
+    it on a LXD cloud, and then use a cross-model or cross-controller relation
+    to integrate it with the Livepatch charm. Note that cross-controller
+    relations might need a bit of networking configuration so that the
+    controllers be able to communicate. To avoid this, we use a cross-model
+    relation (CMR), which means both models should be on the same controller.
+    Follow the instructions below to set up such an environment.
 
     To setup the environment for this test follow these steps:
     - Have a LXD and a MicroK8s cloud on your Juju client. Normally, you don't

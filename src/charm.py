@@ -199,7 +199,6 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_CONTRACTS_ENABLED"] = True
             env_vars["LP_CONTRACTS_URL"] = airgapped_pro_address
             env_vars["LP_PATCH_SYNC_ENABLED"] = False
-            env_vars["LP_PATCH_SYNC_TOKEN"] = ""
         else:
             env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
             if self.config.get("patch-sync.enabled") is True:

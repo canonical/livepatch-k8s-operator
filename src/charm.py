@@ -18,7 +18,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, RelationChangedEvent, RelationDepartedEvent
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, Relation, RelationDataContent, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, RelationDataContent, WaitingStatus
 
 import utils
 from constants import LOGGER, SCHEMA_UPGRADE_CONTAINER, WORKLOAD_CONTAINER
@@ -193,27 +193,28 @@ class LivepatchCharm(CharmBase):
         """Map config to env vars and return a processed dict."""
         env_vars = utils.map_config_to_env_vars(self)
 
+        # Applying `pro-airgapped-server` integration, if any.
+        airgapped_pro_address = self._get_available_pro_airgapped_server_address()
+        if airgapped_pro_address:
+            env_vars["LP_CONTRACTS_ENABLED"] = True
+            env_vars["LP_CONTRACTS_URL"] = airgapped_pro_address
+            env_vars["LP_PATCH_SYNC_ENABLED"] = False
+            env_vars["LP_PATCH_SYNC_TOKEN"] = ""
+        else:
+            env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
+            if self.config.get("patch-sync.enabled") is True:
+                # TODO: Find a better way to identify a on-prem syncing instance.
+                env_vars["LP_PATCH_SYNC_ID"] = self.model.uuid
+
         # Some extra config and checks
-        env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn
         env_vars["LP_SERVER_SERVER_ADDRESS"] = f":{SERVER_PORT}"
-        if self.config.get("patch-sync.enabled") is True:
-            # TODO: Find a better way to identify a on-prem syncing instance.
-            env_vars["LP_PATCH_SYNC_ID"] = self.model.uuid
 
         if self.config.get("patch-storage.type") == "postgres":
             postgres_patch_storage_dsn = (
                 self.config.get("patch-storage.postgres-connection-string", "") or self._state.dsn
             )
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
-
-        # Applying `pro-airgapped-server` integration, if any.
-        pro_relations = self.model.relations.get(PRO_AIRGAPPED_SERVER_RELATION, None)
-        if pro_relations and len(pro_relations):
-            address = self._get_available_pro_airgapped_server_address(pro_relations[0])
-            if address:
-                env_vars["LP_CONTRACTS_ENABLED"] = True
-                env_vars["LP_CONTRACTS_URL"] = address
 
         # remove empty environment values
         env_vars = {key: value for key, value in env_vars.items() if value}
@@ -245,7 +246,8 @@ class LivepatchCharm(CharmBase):
 
         # This token comes from an action rather than config so we check for it specifically.
         if not self.config.get("server.is-hosted"):
-            if not self._state.resource_token:
+            is_airgapped = self._get_available_pro_airgapped_server_address() is not None
+            if not is_airgapped and not self._state.resource_token:
                 error_msg = "✘ patch-sync token not set, run get-resource-token action"
                 self.unit.status = BlockedStatus(error_msg)
                 LOGGER.warning(error_msg)
@@ -447,13 +449,17 @@ class LivepatchCharm(CharmBase):
         """Handle pro-airgapped-server relation-departed event."""
         self._update_workload_container_config(event)
 
-    def _get_available_pro_airgapped_server_address(self, relation: Relation) -> Optional[str]:
+    def _get_available_pro_airgapped_server_address(self) -> Optional[str]:
         """
         Return the pro-airgapped-server address, if any, taken from related unit databags.
 
         The returned value will be the same for all units. This is achieved by iterating over
         a sorted list of available units.
         """
+        pro_relations = self.model.relations.get(PRO_AIRGAPPED_SERVER_RELATION, None)
+        if not pro_relations or len(pro_relations) == 0:
+            return None
+        relation = pro_relations[0]
         sorted_units = sorted(relation.units, key=lambda unit: unit.name)
         for unit in sorted_units:
             data = relation.data.get(unit, None)

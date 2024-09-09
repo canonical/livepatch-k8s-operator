@@ -50,8 +50,6 @@ requires:
     interface: livepatch-pro-airgapped-server
     limit: 1
     optional: true
-  ingress:
-    interface: ingress
   log-proxy:
     interface: loki_push_api
     optional: true

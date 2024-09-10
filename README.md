@@ -31,12 +31,12 @@ juju integrate canonical-livepatch-server-k8s:database postgresql-k8s:database
 
 There is also an endpoint, named `database-legacy`, which can be used with PostgreSQL charm's legacy endpoint, `db` . But it is strongly recommended that users integrate with the `database` endpoint mentioned earlier.
 
-### Ingress
+### Nginx ingress (`nginx-route`)
 
-Livepatch provides an endpoint, named `ingress`, which can be integrated with ingress resources in K8s clusters, like [Traefik](https://charmhub.io/traefik-k8s) or [Nginx](https://charmhub.io/nginx-ingress-integrator). As an example, users can integrate other applications with this endpoint by using Juju as follows:
+Livepatch provides an endpoint, named `nginx-route`, which can be integrated with the [`nginx-ingress-integrator`](https://charmhub.io/nginx-ingress-integrator) charm to expose the Livepatch server via an Nginx-controlled cluster ingress. As an example, users can integrate with this endpoint by using Juju as follows:
 
 ```sh
-juju integrate canonical-livepatch-server-k8s:ingress traefik-k8s:ingress
+juju integrate canonical-livepatch-server-k8s:nginx-route nginx-ingress-integrator:nginx-route
 ```
 
 ### Loki (optional)

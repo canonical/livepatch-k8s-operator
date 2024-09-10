@@ -13,7 +13,7 @@ import pgsql
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
-from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
+from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, RelationChangedEvent, RelationDepartedEvent
@@ -97,14 +97,12 @@ class LivepatchCharm(CharmBase):
             self.on.pro_airgapped_server_relation_departed, self._on_pro_airgapped_server_relation_departed
         )
 
-        # Ingress
-        self.ingress = IngressRequires(
-            self,
-            {
-                "service-hostname": self.config["external_hostname"],
-                "service-name": self.app.name,
-                "service-port": 8080,
-            },
+        # Ingress (nginx-routes interface)
+        require_nginx_route(
+            charm=self,
+            service_hostname=self.app.name,
+            service_name=self.app.name,
+            service_port=8080,
         )
 
         # Loki log-proxy relation

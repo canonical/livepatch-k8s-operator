@@ -24,11 +24,12 @@ source venv/bin/activate
 ### Testing
 
 ```shell
-tox -e fmt          # update your code according to linting rules
-tox -e lint         # code style
-tox -e unit         # unit tests
-tox -e integration  # integration tests
-tox                 # runs 'lint' and 'unit' environments
+tox -e fmt                    # update your code according to linting rules
+tox -e lint                   # code style
+tox -e unit                   # unit tests
+tox -e integration            # integration tests
+tox -e integration-airpagged  # integration tests for air-gapped deployments
+tox                           # runs 'lint' and 'unit' environments
 ```
 
 

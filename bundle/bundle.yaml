@@ -45,4 +45,4 @@ applications:
     trust: true
 relations:
   - ["livepatch:database", "postgresql:database"]
-  - ["livepatch:ingress", "ingress:ingress"]
+  - ["livepatch:nginx-route", "ingress:nginx-route"]

@@ -25,7 +25,6 @@ applications:
     series: jammy
     scale: 1
     options:
-      external_hostname: ""
       auth.basic.enabled: true
       contracts.enabled: false
       patch-cache.cache-size: 128

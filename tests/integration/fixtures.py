@@ -38,7 +38,6 @@ async def deploy_package(ops_test: OpsTest, test_name: str, use_current_stable: 
         jammy = "ubuntu@22.04"
         config = {
             "patch-storage.type": "postgres",
-            "external_hostname": "",
             "auth.basic.enabled": True,
             "contracts.enabled": False,
             "patch-cache.cache-size": 128,

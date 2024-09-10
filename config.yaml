@@ -7,12 +7,6 @@ options:
   ##########
   # Extras #
   ##########
-  external_hostname:
-    type: string
-    description: >
-      External hostname the app should respond to (required).
-    default: "livepatch.canonical.com"
-
   server.log-level:
     default: info
     description: The servers log level.

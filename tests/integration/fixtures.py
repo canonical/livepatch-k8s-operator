@@ -38,7 +38,6 @@ async def deploy_package(ops_test: OpsTest, test_name: str, use_current_stable: 
         jammy = "ubuntu@22.04"
         config = {
             "patch-storage.type": "postgres",
-            "external_hostname": "",
             "auth.basic.enabled": True,
             "contracts.enabled": False,
             "patch-cache.cache-size": 128,
@@ -121,14 +120,14 @@ async def deploy_package(ops_test: OpsTest, test_name: str, use_current_stable: 
 
 
 async def perform_livepatch_integrations(ops_test: OpsTest):
-    """Add relations between Livepatch charm, postgresql-k8s, and nginx-ingress.
+    """Add relations between Livepatch charm, postgresql-k8s, and nginx-ingress-integrator.
 
     Args:
         ops_test: PyTest object.
     """
     logger.info("Integrating Livepatch and Postgresql")
     await ops_test.model.integrate(f"{APP_NAME}:database", f"{POSTGRESQL_NAME}:database")
-    await ops_test.model.integrate(f"{APP_NAME}:ingress", f"{NGINX_INGRESS_CHARM_NAME}:ingress")
+    await ops_test.model.integrate(f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
 
 
 def get_charm_resources():

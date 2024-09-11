@@ -50,8 +50,10 @@ requires:
     interface: livepatch-pro-airgapped-server
     limit: 1
     optional: true
-  ingress:
-    interface: ingress
+  nginx-route:
+    # This interface has replaced the old/deprecated `ingress` interface.
+    interface: nginx-route
+    optional: true
   log-proxy:
     interface: loki_push_api
     optional: true

@@ -25,7 +25,6 @@ applications:
     series: jammy
     scale: 1
     options:
-      external_hostname: ""
       auth.basic.enabled: true
       contracts.enabled: false
       patch-cache.cache-size: 128
@@ -45,4 +44,4 @@ applications:
     trust: true
 relations:
   - ["livepatch:database", "postgresql:database"]
-  - ["livepatch:ingress", "ingress:ingress"]
+  - ["livepatch:nginx-route", "ingress:nginx-route"]

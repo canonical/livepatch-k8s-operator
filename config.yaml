@@ -258,6 +258,14 @@ options:
       all are synced. For example, "5.4.0" will sync "5.4.0" and up.
     type: string
     default: ""
+  patch-sync.sync-tiers:
+    description: >-
+      Mirror patch tier information from the upstream server.
+      WARNING: Enabling this feature will modify existing
+      tier information in order to match the upstream server's
+      tier structure. Avoid this if you already have tiers setup.
+    type: boolean
+    default: false
   patch-sync.proxy.enabled:
     default: false
     description: Whether or not to proxy patch syncs.

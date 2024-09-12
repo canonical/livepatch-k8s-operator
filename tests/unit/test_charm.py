@@ -149,6 +149,16 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.charm.unit.status.name, ActiveStatus.name)
         self.assertEqual(self.harness.charm.unit.status.message, "")
 
+    def test_container_config(self):
+        """Test specific config values match what is expected."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+        self.harness.update_config({"patch-sync.sync-tiers": True})
+
+        self.start_container()
+
+        self._assert_environment_contains({"LP_PATCH_SYNC_SYNC_TIERS": True})
+
     def test_schema_upgrade_action__success(self):
         """Test the scenario where `schema-upgrade` action finishes successfully."""
         self.harness.set_leader(True)

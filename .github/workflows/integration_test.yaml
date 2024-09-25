@@ -23,7 +23,7 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          channel: 1.28-strict/stable
+          channel: 1.30-strict/stable
           juju-channel: 3.5/stable
           provider: microk8s
           microk8s-group: snap_microk8s
@@ -66,7 +66,7 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          channel: 1.28-strict/stable
+          channel: 1.30-strict/stable
           juju-channel: 3.5/stable
           provider: microk8s
           microk8s-group: snap_microk8s

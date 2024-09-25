@@ -103,7 +103,8 @@ jobs:
       # file with the API address changed as we need.
       - name: Tweak MicroK8s API address
         run: |
-          sudo bash -c 'microk8s.config > /var/snap/microk8s/current/credentials/client.config'
+          sudo microk8s.config > /tmp/client.config
+          sudo cp /tmp/client.config /var/snap/microk8s/current/credentials/client.config
       - name: Add MicroK8s cloud to LXD controller
         run: |
           juju add-cloud microk8s --controller localhost-localhost --credential microk8s

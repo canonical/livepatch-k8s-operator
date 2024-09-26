@@ -28,8 +28,9 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
     """
     Deploy the application and its dependencies.
 
-    :param use_current_stable: if True, the current latest stable release of the charm
-                               is deployed (instead of the charm in the current working directory)
+    :param use_current_stable: if True, the current latest stable release of the
+                               charm is deployed (instead of the charm in the
+                               current working directory)
     """
 
     jammy = "ubuntu@22.04"
@@ -86,9 +87,7 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
             apps=[POSTGRESQL_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600
         )
         logger.info(f"Waiting for {APP_NAME}")
-        await ops_test.model.wait_for_idle(
-            apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600
-        )
+        await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
         logger.info(f"Waiting for {NGINX_INGRESS_CHARM_NAME}")
         await ops_test.model.wait_for_idle(
@@ -97,9 +96,7 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
 
         logger.info("Making relations")
         await perform_livepatch_integrations(ops_test)
-        await ops_test.model.wait_for_idle(
-            apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600
-        )
+        await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
         logger.info("Setting server.url-template")
         url = await get_unit_url(ops_test, application=NGINX_INGRESS_CHARM_NAME, unit=0, port=80)
@@ -110,9 +107,7 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
         # The charm automatically triggers schema upgrade after the integrations are made.
         # So, we should wait for an active state.
         logger.info("Waiting for active idle")
-        await ops_test.model.wait_for_idle(
-            apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=300
-        )
+        await ops_test.model.wait_for_idle(apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=300)
         assert ops_test.model.applications[APP_NAME].units[0].workload_status == ACTIVE_STATUS
 
 

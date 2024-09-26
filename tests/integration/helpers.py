@@ -35,7 +35,13 @@ async def ensure_model(
     cloud_name: str,
     cloud_type: Literal["k8s", "lxd"],
 ) -> Union[str, None]:
-    """Get (or create) the model on the given cloud and return its name."""
+    """
+    Get (or create) the model on the given cloud and return its name.
+
+    This function is meant to be used only in multi-cloud test cases where
+    multiple models on different clouds has to be set up before proceeding with
+    deploying charms on them.
+    """
     model_name = f"livepatch-test-{test_name}-{cloud_name}-{__INSTANCE_ID[:4]}"
     for _, v in ops_test.models.items():
         if v.model_name == model_name:
@@ -43,18 +49,20 @@ async def ensure_model(
 
     # Although `OpsTest.track_model` can create a new model, it results in an
     # authorization error when adding a model to a MicroK8s cloud. So, we have
-    # to use Juju client to create a model and then call `track_model` to make
-    # sure it'll be destroyed at the end of the test.
-    exit_code, stdout, stderr = await ops_test.juju("add-model", model_name, cloud_name)
-    if exit_code != 0:
-        logger.error(f"running `juju add-model` failed:\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}")
-        raise RuntimeError("running `juju add-model` failed")
+    # to directly use the Juju controller to create a model and then call the
+    # `track_model` method to ensure it'll be destroyed at the end of the test.
+    await (await ops_test.model.get_controller()).add_model(
+        model_name=model_name,
+        cloud_name=cloud_name,
+        credential_name=cloud_name,
+    )
+
     model = await ops_test.track_model(
         alias=model_name,
         model_name=model_name,
         cloud_name=cloud_name,
         use_existing=True,
-        keep=False,
+        keep=ops_test._init_keep_model or False,  # To respect the `--keep-models` option, if provided.
     )
 
     # When adding a K8s cloud to a LXD controller, we need to update the

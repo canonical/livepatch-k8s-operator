@@ -3,33 +3,31 @@ name: Promote Bundle
 on:
   workflow_dispatch:
     inputs:
-        origin-channel:
-            type: choice
-            description: 'Origin Channel'
-            options:
-            - k8s/edge
-            - k8s/beta
-            - k8s/candidate
-        destination-channel:
-            type: choice
-            description: 'Destination Channel'
-            options:
-            - k8s/beta
-            - k8s/candidate
-            - k8s/stable
+      destination-channel:
+        type: choice
+        description: 'Destination Channel'
+        options:
+          - k8s/beta
+          - k8s/candidate
+          - k8s/stable
 
 jobs:
-  promote:
+  promote-livepatch-operator-k8s-bundle:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v4
-    # Note the use of the release-charm action. Bundles can be treated as charms.
-    - name: Promote Bundle
-      uses: canonical/charming-actions/release-charm@main
-      with:
-        origin-channel: ${{ github.event.inputs.origin-channel }}
-        destination-channel: ${{ github.event.inputs.destination-channel }}
-        tag-prefix: "bundle"
-        charm-path: "./bundle"
-        credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Bundle
+        uses: canonical/charming-actions/upload-bundle@main
+        with:
+            credentials: "${{ secrets.CHARMCRAFT_AUTH }}"
+            tag-prefix: "bundle"
+            bundle-path: ./bundle
+            github-token: "${{ secrets.GITHUB_TOKEN }}"
+            channel: ${{ github.event.inputs.destination-channel }}

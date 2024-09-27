@@ -25,6 +25,10 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
     """
     Test the charm integrates with `pro-airgapped-server`.
 
+    Note that before running this test the LXD controller should be set as the
+    default controller on the client. You can use the `juju switch <CONTROLLER>`
+    command.
+
     Since the `pro-airgapped-server` charm has no K8s version, we need to deploy
     it on a LXD cloud, and then use a cross-model or cross-controller relation
     to integrate it with the Livepatch charm. Note that cross-controller
@@ -79,10 +83,11 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
     """
 
     test_name = "airgapped"
-    await deploy_package(ops_test, test_name)
-
     k8s_model_name = await ensure_model(test_name, ops_test, cloud_name="microk8s", cloud_type="k8s")
     lxd_model_name = await ensure_model(test_name, ops_test, cloud_name="localhost", cloud_type="lxd")
+
+    with ops_test.model_context(k8s_model_name):
+        await deploy_package(ops_test)
 
     with ops_test.model_context(lxd_model_name):
         jammy = "ubuntu@22.04"

@@ -25,7 +25,7 @@ juju deploy canonical-livepatch-server-k8s
 Livepatch server requires integration with a PostgreSQL charm via the `database` endpoint. As an example, users can deploy a [PostgreSQL](https://charmhub.io/postgresql-k8s) database and integrate it with Livepatch as follows:
 
 ```sh
-juju deploy postgresql-k8s
+juju deploy postgresql-k8s --trust
 juju integrate canonical-livepatch-server-k8s:database postgresql-k8s:database
 ```
 

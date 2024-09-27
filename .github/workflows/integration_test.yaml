@@ -23,8 +23,8 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          channel: 1.28-strict/stable
-          juju-channel: 3.4/stable
+          channel: 1.30-strict/stable
+          juju-channel: 3.5/stable
           provider: microk8s
           microk8s-group: snap_microk8s
           microk8s-addons: "ingress storage dns rbac registry"
@@ -66,8 +66,8 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          channel: 1.28-strict/stable
-          juju-channel: 3.4/stable
+          channel: 1.30-strict/stable
+          juju-channel: 3.5/stable
           provider: microk8s
           microk8s-group: snap_microk8s
           microk8s-addons: "ingress storage dns rbac registry"
@@ -103,10 +103,11 @@ jobs:
       # file with the API address changed as we need.
       - name: Tweak MicroK8s API address
         run: |
-          sudo bash -c 'microk8s.config > /var/snap/microk8s/current/credentials/client.config'
+          sudo microk8s.config > /tmp/client.config
+          sudo cp /tmp/client.config /var/snap/microk8s/current/credentials/client.config
       - name: Add MicroK8s cloud to LXD controller
         run: |
-          juju add-cloud microk8s --controller localhost-localhost --credential microk8s
+          /usr/bin/sudo -g snap_microk8s -E juju add-cloud microk8s --controller localhost-localhost --credential microk8s
       - name: Install tox
         run: python -m pip install tox
       - name: Run integration tests (airgapped)

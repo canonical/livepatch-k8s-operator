@@ -191,6 +191,8 @@ class LivepatchCharm(CharmBase):
         """Map config to env vars and return a processed dict."""
         env_vars = utils.map_config_to_env_vars(self)
 
+        env_vars["LIVEPATCH_CONFIG_LOCATION"] = "/etc/livepatch.yaml"
+
         # Applying `pro-airgapped-server` integration, if any.
         airgapped_pro_address = self._get_available_pro_airgapped_server_address()
         if airgapped_pro_address:

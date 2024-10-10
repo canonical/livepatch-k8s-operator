@@ -137,7 +137,7 @@ options:
       The database name can be changed but must be created.
     type: string
   patch-storage.filesystem-path:
-    default: "/home/livepatchu/.livepatch/patches"
+    default: "/var/lib/livepatch/patches"
     description: The filesystem path to store patches.
     type: string
   patch-storage.swift-username:

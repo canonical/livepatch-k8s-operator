@@ -200,7 +200,10 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_CONTRACTS_URL"] = airgapped_pro_address
             env_vars["LP_PATCH_SYNC_ENABLED"] = False
         else:
-            env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
+            if self.config.get("patch-sync.token"):
+                env_vars["LP_PATCH_SYNC_TOKEN"] = self.config.get("patch-sync.token")
+            else:
+                env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
             if self.config.get("patch-sync.enabled") is True:
                 # TODO: Find a better way to identify a on-prem syncing instance.
                 env_vars["LP_PATCH_SYNC_ID"] = self.model.uuid
@@ -633,6 +636,11 @@ class LivepatchCharm(CharmBase):
         if not self._state.is_ready():
             LOGGER.error("cannot fetch the resource token: peer relation not ready")
             event.set_results({"error": "cannot fetch the resource token: peer relation not ready"})
+            return
+
+        if self.config.get("patch-sync.token"):
+            LOGGER.error("patch-sync.token is already set. It should be unset before setting a resource token")
+            event.set_results({"error": "patch-sync.token is already set. It should be unset before setting a resource token"})
             return
 
         contract_token = event.params.get("contract-token", "")

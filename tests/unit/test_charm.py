@@ -159,6 +159,16 @@ class TestCharm(unittest.TestCase):
 
         self._assert_environment_contains({"LP_PATCH_SYNC_SYNC_TIERS": True})
 
+    def test_sync_token_set(self):
+        """Test specific config values match what is expected."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+        self.harness.update_config({"patch-sync.token": "AAAABBBB"})
+
+        self.start_container()
+
+        self._assert_environment_contains({"LP_PATCH_SYNC_TOKEN": "AAAABBBB"})
+
     def test_schema_upgrade_action__success(self):
         """Test the scenario where `schema-upgrade` action finishes successfully."""
         self.harness.set_leader(True)
@@ -467,6 +477,18 @@ class TestCharm(unittest.TestCase):
         output = self.harness.run_action("get-resource-token", {"contract-token": ""})
 
         self.assertEqual(output.results, {"error": "cannot fetch the resource token: no contract token provided"})
+
+    def test_get_resource_token_action__failure__sync_token_already_set(self):
+        """Test the scenario where `get-resource-token` action fails because sync token is already set."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        self.harness.update_config({"patch-sync.token": "AAAABBBB"})
+
+        output = self.harness.run_action("get-resource-token", {"contract-token": "some-token"})
+
+        self.assertEqual(output.results, {"error": "patch-sync.token is already set. It should be unset before setting a resource token"})
 
     def test_missing_url_template_config_causes_blocked_state(self):
         """A test for missing url template."""

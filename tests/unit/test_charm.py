@@ -1020,6 +1020,7 @@ class TestCharm(unittest.TestCase):
         self._assert_environment_contains(
             {
                 "LP_PATCH_SYNC_ENABLED": True,
+                "LP_PATCH_SYNC_TOKEN": "AAAABBBB",
                 "LP_CONTRACTS_ENABLED": True,
                 "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
             }

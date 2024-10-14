@@ -988,7 +988,7 @@ class TestCharm(unittest.TestCase):
         )
 
     def test_pro_airgapped_server__sync_enabled_when_sync_token_set(self):
-        """Test pro-airgapped-server relation."""
+        """Test pro-airgapped-server syncs is enabled when sync token is set."""
         self.harness.set_leader(True)
         self.harness.enable_hooks()
 
@@ -1026,7 +1026,7 @@ class TestCharm(unittest.TestCase):
         )
 
     def test_pro_airgapped_server__sync_disabled_when_sync_token_not_set(self):
-        """Test pro-airgapped-server relation."""
+        """Test pro-airgapped-server syncs is disabled when sync token is set."""
         self.harness.set_leader(True)
         self.harness.enable_hooks()
 

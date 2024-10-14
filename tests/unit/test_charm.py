@@ -488,7 +488,10 @@ class TestCharm(unittest.TestCase):
 
         output = self.harness.run_action("get-resource-token", {"contract-token": "some-token"})
 
-        self.assertEqual(output.results, {"error": "patch-sync.token is already set. It should be unset before setting a resource token"})
+        self.assertEqual(
+            output.results,
+            {"error": "patch-sync.token is already set. It should be unset before setting a resource token"},
+        )
 
     def test_missing_url_template_config_causes_blocked_state(self):
         """A test for missing url template."""

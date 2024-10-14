@@ -641,7 +641,9 @@ class LivepatchCharm(CharmBase):
 
         if self.config.get("patch-sync.token"):
             LOGGER.error("patch-sync.token is already set. It should be unset before setting a resource token")
-            event.set_results({"error": "patch-sync.token is already set. It should be unset before setting a resource token"})
+            event.set_results(
+                {"error": "patch-sync.token is already set. It should be unset before setting a resource token"}
+            )
             return
 
         contract_token = event.params.get("contract-token", "")

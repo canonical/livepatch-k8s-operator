@@ -957,7 +957,6 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.harness.charm._state.dsn = "postgresql://123"
-        # self.harness.charm._state.resource_token = TEST_TOKEN
 
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
             migration.return_value = False
@@ -1059,6 +1058,9 @@ class TestCharm(unittest.TestCase):
             {
                 "LP_CONTRACTS_ENABLED": True,
                 "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
+            },
+            {
+                "LP_PATCH_SYNC_ENABLED": True
             }
         )
 
@@ -1068,7 +1070,6 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.harness.charm._state.dsn = "postgresql://123"
-        self.harness.charm._state.resource_token = TEST_TOKEN
 
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
             migration.return_value = False
@@ -1124,7 +1125,6 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.harness.charm._state.dsn = "postgresql://123"
-        self.harness.charm._state.resource_token = TEST_TOKEN
 
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
             migration.return_value = False

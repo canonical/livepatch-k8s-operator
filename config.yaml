@@ -251,6 +251,10 @@ options:
     default: https://livepatch.canonical.com
     description: Livepatch server to download patch snapshots from.
     type: string
+  patch-sync.token:
+    description: Token generated from the admin-tool to authenticate machine to machine.
+    type: string
+    default: ""
   patch-sync.minimum-kernel-version:
     description: >-
       A minimum kernel version of format "0.0.0" denoting the lowest 

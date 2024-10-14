@@ -198,11 +198,12 @@ class LivepatchCharm(CharmBase):
         if airgapped_pro_address:
             env_vars["LP_CONTRACTS_ENABLED"] = True
             env_vars["LP_CONTRACTS_URL"] = airgapped_pro_address
-            env_vars["LP_PATCH_SYNC_ENABLED"] = False
+            # if sync-token is not provided we disable the syncing in airgapped env.
+            # the sync could be enabled when chaining multiple machines in an airgapped env.
+            if not self.config.get("patch-sync.token"):
+                env_vars["LP_PATCH_SYNC_ENABLED"] = False
         else:
-            if self.config.get("patch-sync.token"):
-                env_vars["LP_PATCH_SYNC_TOKEN"] = self.config.get("patch-sync.token")
-            else:
+            if not self.config.get("patch-sync.token"):
                 env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
             if self.config.get("patch-sync.enabled") is True:
                 # TODO: Find a better way to identify a on-prem syncing instance.

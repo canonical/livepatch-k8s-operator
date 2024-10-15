@@ -526,6 +526,37 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
         self.assertEqual(self.harness.charm.unit.status.message, "✘ server.url-template config not set")
 
+    def test_sync_token_enough_active_state(self):
+        """For on-prem servers, a sync token and url template should be enough for active state."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+
+        container = self.harness.model.unit.get_container("livepatch")
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.charm.on.livepatch_pebble_ready.emit(container)
+
+            self.harness.update_config(
+                {
+                    "auth.sso.enabled": True,
+                    "patch-storage.type": "filesystem",
+                    "patch-storage.filesystem-path": "/srv/",
+                    "patch-cache.enabled": True,
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                    "patch-sync.token": "test-token",
+                }
+            )
+            self.harness.charm.on.config_changed.emit()
+
+            # Emit the pebble-ready event for livepatch
+            self.harness.charm.on.livepatch_pebble_ready.emit(container)
+
+        # Check the that the plan was updated
+        self.assertEqual(self.harness.charm.unit.status.name, ActiveStatus.name)
+
     def test_missing_sync_token_causes_blocked_state(self):
         """For on-prem servers, a missing sync token should cause a blocked state."""
         self.harness.set_leader(True)
@@ -1059,9 +1090,7 @@ class TestCharm(unittest.TestCase):
                 "LP_CONTRACTS_ENABLED": True,
                 "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
             },
-            {
-                "LP_PATCH_SYNC_ENABLED": True
-            }
+            {"LP_PATCH_SYNC_ENABLED": True},
         )
 
     def test_pro_airgapped_server_relation__multiple_units(self):

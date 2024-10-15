@@ -159,6 +159,16 @@ class TestCharm(unittest.TestCase):
 
         self._assert_environment_contains({"LP_PATCH_SYNC_SYNC_TIERS": True})
 
+    def test_sync_token_set(self):
+        """Test specific config values match what is expected."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+        self.harness.update_config({"patch-sync.token": "AAAABBBB"})
+
+        self.start_container()
+
+        self._assert_environment_contains({"LP_PATCH_SYNC_TOKEN": "AAAABBBB"})
+
     def test_schema_upgrade_action__success(self):
         """Test the scenario where `schema-upgrade` action finishes successfully."""
         self.harness.set_leader(True)
@@ -467,6 +477,21 @@ class TestCharm(unittest.TestCase):
         output = self.harness.run_action("get-resource-token", {"contract-token": ""})
 
         self.assertEqual(output.results, {"error": "cannot fetch the resource token: no contract token provided"})
+
+    def test_get_resource_token_action__failure__sync_token_already_set(self):
+        """Test the scenario where `get-resource-token` action fails because sync token is already set."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        self.harness.update_config({"patch-sync.token": "AAAABBBB"})
+
+        output = self.harness.run_action("get-resource-token", {"contract-token": "some-token"})
+
+        self.assertEqual(
+            output.results,
+            {"error": "patch-sync.token is already set. It should be unset before setting a resource token"},
+        )
 
     def test_missing_url_template_config_causes_blocked_state(self):
         """A test for missing url template."""
@@ -932,7 +957,6 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.harness.charm._state.dsn = "postgresql://123"
-        self.harness.charm._state.resource_token = TEST_TOKEN
 
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
             migration.return_value = False
@@ -962,13 +986,90 @@ class TestCharm(unittest.TestCase):
             }
         )
 
+    def test_pro_airgapped_server__sync_enabled_when_sync_token_set(self):
+        """Test pro-airgapped-server syncs is enabled when sync token is set."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                    "patch-sync.enabled": True,
+                    "patch-sync.token": "AAAABBBB",
+                }
+            )
+
+            pro_rel_id = self.harness.add_relation("pro-airgapped-server", "pro-airgapped-server")
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/0")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/0",
+                {
+                    "scheme": "scheme",
+                    "hostname": "some.host.name",
+                    "port": "9999",
+                },
+            )
+
+        self._assert_environment_contains(
+            {
+                "LP_PATCH_SYNC_ENABLED": True,
+                "LP_PATCH_SYNC_TOKEN": "AAAABBBB",
+                "LP_CONTRACTS_ENABLED": True,
+                "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
+            }
+        )
+
+    def test_pro_airgapped_server__sync_disabled_when_sync_token_not_set(self):
+        """Test pro-airgapped-server syncs is disabled when sync token is set."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                    "patch-sync.enabled": True,
+                }
+            )
+
+            pro_rel_id = self.harness.add_relation("pro-airgapped-server", "pro-airgapped-server")
+            self.harness.add_relation_unit(pro_rel_id, "pro-airgapped-server/0")
+            self.harness.update_relation_data(
+                pro_rel_id,
+                "pro-airgapped-server/0",
+                {
+                    "scheme": "scheme",
+                    "hostname": "some.host.name",
+                    "port": "9999",
+                },
+            )
+
+        self._assert_environment_contains(
+            {
+                "LP_CONTRACTS_ENABLED": True,
+                "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
+            },
+            {
+                "LP_PATCH_SYNC_ENABLED": True
+            }
+        )
+
     def test_pro_airgapped_server_relation__multiple_units(self):
         """Test pro-airgapped-server relation when there are multiple units."""
         self.harness.set_leader(True)
         self.harness.enable_hooks()
 
         self.harness.charm._state.dsn = "postgresql://123"
-        self.harness.charm._state.resource_token = TEST_TOKEN
 
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
             migration.return_value = False
@@ -1024,7 +1125,6 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.harness.charm._state.dsn = "postgresql://123"
-        self.harness.charm._state.resource_token = TEST_TOKEN
 
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
             migration.return_value = False

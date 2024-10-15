@@ -546,7 +546,7 @@ class TestCharm(unittest.TestCase):
                     "patch-cache.enabled": True,
                     "server.url-template": "http://localhost/{filename}",
                     "server.is-hosted": False,
-                    "patch-sync.token": "test-token"
+                    "patch-sync.token": "test-token",
                 }
             )
             self.harness.charm.on.config_changed.emit()
@@ -1090,9 +1090,7 @@ class TestCharm(unittest.TestCase):
                 "LP_CONTRACTS_ENABLED": True,
                 "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
             },
-            {
-                "LP_PATCH_SYNC_ENABLED": True
-            }
+            {"LP_PATCH_SYNC_ENABLED": True},
         )
 
     def test_pro_airgapped_server_relation__multiple_units(self):

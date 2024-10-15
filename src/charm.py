@@ -250,7 +250,8 @@ class LivepatchCharm(CharmBase):
         # This token comes from an action rather than config so we check for it specifically.
         if not self.config.get("server.is-hosted"):
             is_airgapped = self._get_available_pro_airgapped_server_address() is not None
-            if not is_airgapped and not self._state.resource_token:
+            # blocked status if not airgapped, no resource token in the state and no sync token in the config
+            if not is_airgapped and not self._state.resource_token and not self.config.get("patch-sync.token"):
                 error_msg = "✘ patch-sync token not set, run get-resource-token action"
                 self.unit.status = BlockedStatus(error_msg)
                 LOGGER.warning(error_msg)

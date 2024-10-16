@@ -242,7 +242,7 @@ class LivepatchCharm(CharmBase):
 
         return env_vars
 
-    def _update_workload_container_config(self, event: HookEvent | None):
+    def _update_workload_container_config(self, event: Optional[HookEvent]):
         """
         Update workload with all available configuration data.
 
@@ -715,7 +715,7 @@ class LivepatchCharm(CharmBase):
 {"}"}
 """
 
-    def _push_to_workload(self, filename, content, event: HookEvent | None):
+    def _push_to_workload(self, filename, content, event: Optional[HookEvent]):
         """
         Create file on the workload container with the specified content.
 

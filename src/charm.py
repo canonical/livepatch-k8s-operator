@@ -182,7 +182,7 @@ class LivepatchCharm(CharmBase):
                 container.stop(LIVEPATCH_SERVICE_NAME)
         self.unit.status = WaitingStatus("service stopped")
 
-    def handle_schema_upgrade(self, event):
+    def handle_schema_upgrade(self):
         """Check if a schema upgrade is required, and perform it."""
         dsn = self._state.dsn
         if not dsn:
@@ -269,7 +269,7 @@ class LivepatchCharm(CharmBase):
         self._push_to_workload(LOGROTATE_CONFIG_PATH, self._get_logrotate_config(), event)
 
         try:
-            self.handle_schema_upgrade(event)
+            self.handle_schema_upgrade()
         except DeferError:
             if event:
                 event.defer()

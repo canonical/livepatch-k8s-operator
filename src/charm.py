@@ -55,6 +55,7 @@ class LivepatchCharm(CharmBase):
 
         self._state = State(self.app, lambda: self.model.get_relation("livepatch"))
 
+        self.framework.observe(self.on.livepatch_relation_changed, self.on_peer_relation_changed)
         self.framework.observe(self.on.config_changed, self.on_config_changed)
         self.framework.observe(self.on.update_status, self.on_update_status)
         self.framework.observe(self.on.leader_elected, self.on_leader_elected)
@@ -124,6 +125,23 @@ class LivepatchCharm(CharmBase):
 
         # Grafana dashboard relation
         self._grafana_dashboards = GrafanaDashboardProvider(self, relation_name="grafana-dashboard")
+
+    def on_peer_relation_changed(self, event):
+        """
+        On peer relation changed hook.
+
+        This hook is for the non-leader units to get notified when the state
+        changes. On the leader unit this hook should be ignored to avoid
+        repetitive workload restarts while handling relations. This also means,
+        on the leader unit, whenever the state changes, the update workload
+        method should be called manually.
+        """
+        if self.unit.is_leader():
+            return
+        if not self._state.is_ready():
+            LOGGER.warning("State is not ready")
+            return
+        self._update_workload_container_config(event)
 
     def on_config_changed(self, event):
         """On config changed hook, which runs first."""
@@ -383,7 +401,7 @@ class LivepatchCharm(CharmBase):
                 db_uri = event.master.uri.split("?", 1)[0]
                 self._state.dsn = db_uri
 
-        self.on_config_changed(event)
+        self._update_workload_container_config(event)
 
     def _on_legacy_db_standby_changed(self, event: pgsql.StandbyChangedEvent):
         LOGGER.info("(postgresql, legacy database relation) STANDBY_CHANGED event fired.")
@@ -714,7 +732,9 @@ class LivepatchCharm(CharmBase):
             return False
 
         container.push(TRUSTED_CA_FILENAME, cert, make_dirs=True)
-        self._state.contract_cert_hash = cert_hash
+
+        if self.unit.is_leader():
+            self._state.contract_cert_hash = cert_hash
 
         stdout, stderr = container.exec(["update-ca-certificates", "--fresh"]).wait_output()
         LOGGER.info("stdout update-ca-certificates: %s", stdout)

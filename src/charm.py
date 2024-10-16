@@ -676,6 +676,20 @@ class LivepatchCharm(CharmBase):
             )
             return
 
+        # If there already is an integration with the `pro-airgapped-server`
+        # the user shouldn't be able to run this action, unless they remove the
+        # relation.
+        if self._get_available_pro_airgapped_server_address():
+            LOGGER.error(
+                "already integrated with `pro-airgapped-server`. The relation should be removed before setting a resource token"
+            )
+            event.set_results(
+                {
+                    "error": "already integrated with `pro-airgapped-server`. The relation should be removed before setting a resource token"
+                }
+            )
+            return
+
         contract_token = event.params.get("contract-token", "")
         if not contract_token:
             event.set_results({"error": "cannot fetch the resource token: no contract token provided"})

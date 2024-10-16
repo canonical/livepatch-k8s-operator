@@ -437,7 +437,7 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.start_container()
-
+        del self.harness.charm._state.resource_token
         contracts_url = self.harness.charm.config.get("contracts.url")
 
         def make_request_side_effect(method: str, url: str, *args, **kwargs):
@@ -462,6 +462,7 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.start_container()
+        del self.harness.charm._state.resource_token
 
         output = self.harness.run_action("get-resource-token", {"contract-token": "some-token"})
 
@@ -473,6 +474,7 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.start_container()
+        del self.harness.charm._state.resource_token
 
         output = self.harness.run_action("get-resource-token", {"contract-token": ""})
 
@@ -484,6 +486,7 @@ class TestCharm(unittest.TestCase):
         self.harness.enable_hooks()
 
         self.start_container()
+        del self.harness.charm._state.resource_token
         self.harness.update_config({"patch-sync.token": "AAAABBBB"})
 
         output = self.harness.run_action("get-resource-token", {"contract-token": "some-token"})

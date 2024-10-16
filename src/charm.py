@@ -16,7 +16,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
-from ops.charm import ActionEvent, CharmBase, RelationChangedEvent, RelationDepartedEvent
+from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, RelationDataContent, WaitingStatus
 
@@ -242,10 +242,18 @@ class LivepatchCharm(CharmBase):
 
         return env_vars
 
-    def _update_workload_container_config(self, event):
-        """Update workload with all available configuration data."""
+    def _update_workload_container_config(self, event: HookEvent | None):
+        """
+        Update workload with all available configuration data.
+
+        Note that given event should be deferrable. For example, action events
+        (of type ActionEvent), will raise exception if their `defer` method is
+        invoked. So, the caller of this method should pass event as None if it's
+        not a deferrable event.
+        """
         if not self._state.is_ready():
-            event.defer()
+            if event:
+                event.defer()
             LOGGER.warning("State is not ready")
             return
 
@@ -253,7 +261,8 @@ class LivepatchCharm(CharmBase):
         if not workload_container.can_connect():
             LOGGER.info("workload container not ready - deferring")
             self.unit.status = WaitingStatus("Waiting to connect - workload container")
-            event.defer()
+            if event:
+                event.defer()
             return
 
         # Quickly update logrotates config each workload update
@@ -262,7 +271,8 @@ class LivepatchCharm(CharmBase):
         try:
             self.handle_schema_upgrade(event)
         except DeferError:
-            event.defer()
+            if event:
+                event.defer()
             return
 
         # This token comes from an action rather than config so we check for it specifically.
@@ -522,7 +532,8 @@ class LivepatchCharm(CharmBase):
             if service and service.is_running():
                 container.stop(LIVEPATCH_SERVICE_NAME)
 
-        self._update_workload_container_config(event)
+        # Action events are not deferrable, so we should pass event as None.
+        self._update_workload_container_config(None)
 
     def schema_upgrade_action(self, event: ActionEvent):
         """Run the schema upgrade action."""
@@ -682,6 +693,9 @@ class LivepatchCharm(CharmBase):
 
         self._state.resource_token = resource_token
 
+        # Action events are not deferrable, so we should pass event as None.
+        self._update_workload_container_config(None)
+
         event.set_results({"result": "resource token set"})
 
     def set_status_and_log(self, msg, status) -> None:
@@ -701,15 +715,21 @@ class LivepatchCharm(CharmBase):
 {"}"}
 """
 
-    def _push_to_workload(self, filename, content, event):
-        """Create file on the workload container with the specified content."""
+    def _push_to_workload(self, filename, content, event: HookEvent | None):
+        """
+        Create file on the workload container with the specified content.
+
+        If the underlying event is not deferrable (e.g., an action event), the
+        caller should pass None as the `event` argument.
+        """
         container = self.unit.get_container(WORKLOAD_CONTAINER)
         if container.can_connect():
             LOGGER.info(f"pushing file {filename} to the workload container")
             container.push(filename, content, make_dirs=True)
         else:
             LOGGER.info("workload container not ready - deferring")
-            event.defer()
+            if event:
+                event.defer()
 
     def _update_trusted_ca_certs(self, container: Container) -> bool:
         """Update trusted CA certificates with the cert from configuration.

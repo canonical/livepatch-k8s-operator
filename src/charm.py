@@ -746,7 +746,7 @@ class LivepatchCharm(CharmBase):
             container (Container): The workload container, the caller must ensure that we can connect.
         """
         if not self.config.get("contracts.ca"):
-            LOGGER.info("ca config not set")
+            LOGGER.debug("ca config not set")
             return
 
         try:

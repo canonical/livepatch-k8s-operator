@@ -760,7 +760,7 @@ class LivepatchCharm(CharmBase):
         LOGGER.info("stdout update-ca-certificates: %s", stdout)
         LOGGER.info("stderr update-ca-certificates: %s", stderr)
 
-    def _defer(self, event: HookEvent | None):
+    def _defer(self, event: Optional[HookEvent]):
         """
         Defer given event object if it's not None.
 

@@ -313,18 +313,14 @@ class LivepatchCharm(CharmBase):
             },
         }
         layer_label = "livepatch"
-        force_restart = self._update_trusted_ca_certs(workload_container)
+        self._update_trusted_ca_certs(workload_container)
         workload_container.add_layer(layer_label, update_config_environment_layer, combine=True)
-        self._start_or_restart_service(workload_container, force_restart)
+        self._start_or_restart_service(workload_container)
 
-    def _start_or_restart_service(self, workload_container, force_restart):
+    def _start_or_restart_service(self, workload_container):
         if self._ready(workload_container):
             if workload_container.get_service(LIVEPATCH_SERVICE_NAME).is_running():
-                if force_restart:
-                    workload_container.restart(LIVEPATCH_SERVICE_NAME)
-                else:
-                    LOGGER.info("Replanning services")
-                    workload_container.replan()
+                workload_container.restart(LIVEPATCH_SERVICE_NAME)
             else:
                 LOGGER.info("Starting Livepatch services")
                 workload_container.start(LIVEPATCH_SERVICE_NAME)
@@ -741,36 +737,28 @@ class LivepatchCharm(CharmBase):
             LOGGER.info("workload container not ready - deferring")
             self._defer(event)
 
-    def _update_trusted_ca_certs(self, container: Container) -> bool:
+    def _update_trusted_ca_certs(self, container: Container):
         """Update trusted CA certificates with the cert from configuration.
 
         Livepatch needs to restart to use newly received certificates.
 
         Args:
             container (Container): The workload container, the caller must ensure that we can connect.
-
-        Returns:
-            bool: A boolean to indicate whether the workload service should be restarted.
         """
         if not self.config.get("contracts.ca"):
             LOGGER.info("ca config not set")
-            return False
+            return
 
-        cert = b64decode(self.config.get("contracts.ca")).decode("utf8")
-        cert_hash = hash(cert)
-        if self._state.contract_cert_hash and cert_hash == self._state.contract_cert_hash:
-            return False
+        try:
+            cert = b64decode(self.config.get("contracts.ca")).decode("utf8")
+        except Exception:
+            LOGGER.error("failed to parse base64 value of `contracts.ca` config option")
+            return
 
         container.push(TRUSTED_CA_FILENAME, cert, make_dirs=True)
-
-        if self.unit.is_leader():
-            self._state.contract_cert_hash = cert_hash
-
         stdout, stderr = container.exec(["update-ca-certificates", "--fresh"]).wait_output()
         LOGGER.info("stdout update-ca-certificates: %s", stdout)
         LOGGER.info("stderr update-ca-certificates: %s", stderr)
-
-        return True
 
     def _defer(self, event: HookEvent | None):
         """

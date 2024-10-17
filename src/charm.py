@@ -252,8 +252,7 @@ class LivepatchCharm(CharmBase):
         not a deferrable event.
         """
         if not self._state.is_ready():
-            if event:
-                event.defer()
+            self._defer(event)
             LOGGER.warning("State is not ready")
             return
 
@@ -261,8 +260,7 @@ class LivepatchCharm(CharmBase):
         if not workload_container.can_connect():
             LOGGER.info("workload container not ready - deferring")
             self.unit.status = WaitingStatus("Waiting to connect - workload container")
-            if event:
-                event.defer()
+            self._defer(event)
             return
 
         # Quickly update logrotates config each workload update
@@ -271,8 +269,7 @@ class LivepatchCharm(CharmBase):
         try:
             self.handle_schema_upgrade()
         except DeferError:
-            if event:
-                event.defer()
+            self._defer(event)
             return
 
         # This token comes from an action rather than config so we check for it specifically.
@@ -742,8 +739,7 @@ class LivepatchCharm(CharmBase):
             container.push(filename, content, make_dirs=True)
         else:
             LOGGER.info("workload container not ready - deferring")
-            if event:
-                event.defer()
+            self._defer(event)
 
     def _update_trusted_ca_certs(self, container: Container) -> bool:
         """Update trusted CA certificates with the cert from configuration.
@@ -775,6 +771,17 @@ class LivepatchCharm(CharmBase):
         LOGGER.info("stderr update-ca-certificates: %s", stderr)
 
         return True
+
+    def _defer(self, event: HookEvent | None):
+        """
+        Defer given event object if it's not None.
+
+        This is a helper method to avoid repeating none checks. It should only
+        be used when the event object can be None.
+        """
+        if not event:
+            return
+        event.defer()
 
 
 if __name__ == "__main__":

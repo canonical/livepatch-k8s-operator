@@ -16,7 +16,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
-from ops.charm import ActionEvent, CharmBase, RelationChangedEvent, RelationDepartedEvent
+from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, RelationDataContent, WaitingStatus
 
@@ -55,6 +55,7 @@ class LivepatchCharm(CharmBase):
 
         self._state = State(self.app, lambda: self.model.get_relation("livepatch"))
 
+        self.framework.observe(self.on.livepatch_relation_changed, self.on_peer_relation_changed)
         self.framework.observe(self.on.config_changed, self.on_config_changed)
         self.framework.observe(self.on.update_status, self.on_update_status)
         self.framework.observe(self.on.leader_elected, self.on_leader_elected)
@@ -125,6 +126,23 @@ class LivepatchCharm(CharmBase):
         # Grafana dashboard relation
         self._grafana_dashboards = GrafanaDashboardProvider(self, relation_name="grafana-dashboard")
 
+    def on_peer_relation_changed(self, event):
+        """
+        On peer relation changed hook.
+
+        This hook is for the non-leader units to get notified when the state
+        changes. On the leader unit this hook should be ignored to avoid
+        repetitive workload restarts while handling relations. This also means,
+        on the leader unit, whenever the state changes, the update workload
+        method should be called manually.
+        """
+        if self.unit.is_leader():
+            return
+        if not self._state.is_ready():
+            LOGGER.warning("State is not ready")
+            return
+        self._update_workload_container_config(event)
+
     def on_config_changed(self, event):
         """On config changed hook, which runs first."""
         self._update_workload_container_config(event)
@@ -164,7 +182,7 @@ class LivepatchCharm(CharmBase):
                 container.stop(LIVEPATCH_SERVICE_NAME)
         self.unit.status = WaitingStatus("service stopped")
 
-    def handle_schema_upgrade(self, event):
+    def handle_schema_upgrade(self):
         """Check if a schema upgrade is required, and perform it."""
         dsn = self._state.dsn
         if not dsn:
@@ -224,10 +242,17 @@ class LivepatchCharm(CharmBase):
 
         return env_vars
 
-    def _update_workload_container_config(self, event):
-        """Update workload with all available configuration data."""
+    def _update_workload_container_config(self, event: Optional[HookEvent]):
+        """
+        Update workload with all available configuration data.
+
+        Note that given event should be deferrable. For example, action events
+        (of type ActionEvent), will raise exception if their `defer` method is
+        invoked. So, the caller of this method should pass event as None if it's
+        not a deferrable event.
+        """
         if not self._state.is_ready():
-            event.defer()
+            self._defer(event)
             LOGGER.warning("State is not ready")
             return
 
@@ -235,16 +260,16 @@ class LivepatchCharm(CharmBase):
         if not workload_container.can_connect():
             LOGGER.info("workload container not ready - deferring")
             self.unit.status = WaitingStatus("Waiting to connect - workload container")
-            event.defer()
+            self._defer(event)
             return
 
         # Quickly update logrotates config each workload update
         self._push_to_workload(LOGROTATE_CONFIG_PATH, self._get_logrotate_config(), event)
 
         try:
-            self.handle_schema_upgrade(event)
+            self.handle_schema_upgrade()
         except DeferError:
-            event.defer()
+            self._defer(event)
             return
 
         # This token comes from an action rather than config so we check for it specifically.
@@ -288,18 +313,14 @@ class LivepatchCharm(CharmBase):
             },
         }
         layer_label = "livepatch"
-        force_restart = self._update_trusted_ca_certs(workload_container)
+        self._update_trusted_ca_certs(workload_container)
         workload_container.add_layer(layer_label, update_config_environment_layer, combine=True)
-        self._start_or_restart_service(workload_container, force_restart)
+        self._start_or_restart_service(workload_container)
 
-    def _start_or_restart_service(self, workload_container, force_restart):
+    def _start_or_restart_service(self, workload_container):
         if self._ready(workload_container):
             if workload_container.get_service(LIVEPATCH_SERVICE_NAME).is_running():
-                if force_restart:
-                    workload_container.restart(LIVEPATCH_SERVICE_NAME)
-                else:
-                    LOGGER.info("Replanning services")
-                    workload_container.replan()
+                workload_container.restart(LIVEPATCH_SERVICE_NAME)
             else:
                 LOGGER.info("Starting Livepatch services")
                 workload_container.start(LIVEPATCH_SERVICE_NAME)
@@ -383,7 +404,7 @@ class LivepatchCharm(CharmBase):
                 db_uri = event.master.uri.split("?", 1)[0]
                 self._state.dsn = db_uri
 
-        self.on_config_changed(event)
+        self._update_workload_container_config(event)
 
     def _on_legacy_db_standby_changed(self, event: pgsql.StandbyChangedEvent):
         LOGGER.info("(postgresql, legacy database relation) STANDBY_CHANGED event fired.")
@@ -504,7 +525,8 @@ class LivepatchCharm(CharmBase):
             if service and service.is_running():
                 container.stop(LIVEPATCH_SERVICE_NAME)
 
-        self._update_workload_container_config(event)
+        # Action events are not deferrable, so we should pass event as None.
+        self._update_workload_container_config(None)
 
     def schema_upgrade_action(self, event: ActionEvent):
         """Run the schema upgrade action."""
@@ -647,6 +669,20 @@ class LivepatchCharm(CharmBase):
             )
             return
 
+        # If there already is an integration with the `pro-airgapped-server`
+        # the user shouldn't be able to run this action, unless they remove the
+        # relation.
+        if self._get_available_pro_airgapped_server_address():
+            LOGGER.error(
+                "already integrated with `pro-airgapped-server`. The relation should be removed before setting a resource token"
+            )
+            event.set_results(
+                {
+                    "error": "already integrated with `pro-airgapped-server`. The relation should be removed before setting a resource token"
+                }
+            )
+            return
+
         contract_token = event.params.get("contract-token", "")
         if not contract_token:
             event.set_results({"error": "cannot fetch the resource token: no contract token provided"})
@@ -663,6 +699,9 @@ class LivepatchCharm(CharmBase):
         resource_token = utils.get_resource_token(machine_token, contracts_url=contracts_url, proxies=proxies)
 
         self._state.resource_token = resource_token
+
+        # Action events are not deferrable, so we should pass event as None.
+        self._update_workload_container_config(None)
 
         event.set_results({"result": "resource token set"})
 
@@ -683,44 +722,54 @@ class LivepatchCharm(CharmBase):
 {"}"}
 """
 
-    def _push_to_workload(self, filename, content, event):
-        """Create file on the workload container with the specified content."""
+    def _push_to_workload(self, filename, content, event: Optional[HookEvent]):
+        """
+        Create file on the workload container with the specified content.
+
+        If the underlying event is not deferrable (e.g., an action event), the
+        caller should pass None as the `event` argument.
+        """
         container = self.unit.get_container(WORKLOAD_CONTAINER)
         if container.can_connect():
             LOGGER.info(f"pushing file {filename} to the workload container")
             container.push(filename, content, make_dirs=True)
         else:
             LOGGER.info("workload container not ready - deferring")
-            event.defer()
+            self._defer(event)
 
-    def _update_trusted_ca_certs(self, container: Container) -> bool:
+    def _update_trusted_ca_certs(self, container: Container):
         """Update trusted CA certificates with the cert from configuration.
 
         Livepatch needs to restart to use newly received certificates.
 
         Args:
             container (Container): The workload container, the caller must ensure that we can connect.
-
-        Returns:
-            bool: A boolean to indicate whether the workload service should be restarted.
         """
         if not self.config.get("contracts.ca"):
-            LOGGER.info("ca config not set")
-            return False
+            LOGGER.debug("ca config not set")
+            return
 
-        cert = b64decode(self.config.get("contracts.ca")).decode("utf8")
-        cert_hash = hash(cert)
-        if self._state.contract_cert_hash and cert_hash == self._state.contract_cert_hash:
-            return False
+        try:
+            cert = b64decode(self.config.get("contracts.ca")).decode("utf8")
+        except Exception:
+            LOGGER.error("failed to parse base64 value of `contracts.ca` config option")
+            return
 
         container.push(TRUSTED_CA_FILENAME, cert, make_dirs=True)
-        self._state.contract_cert_hash = cert_hash
-
         stdout, stderr = container.exec(["update-ca-certificates", "--fresh"]).wait_output()
         LOGGER.info("stdout update-ca-certificates: %s", stdout)
         LOGGER.info("stderr update-ca-certificates: %s", stderr)
 
-        return True
+    def _defer(self, event: Optional[HookEvent]):
+        """
+        Defer given event object if it's not None.
+
+        This is a helper method to avoid repeating none checks. It should only
+        be used when the event object can be None.
+        """
+        if not event:
+            return
+        event.defer()
 
 
 if __name__ == "__main__":

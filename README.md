@@ -76,14 +76,9 @@ Livepatch can be optionally integrated with [`pro-airgapped-server`](https://cha
 juju integrate canonical-livepatch-server:pro-airgapped-server pro-airgapped-server
 ```
 
-## OCI Images
+## OCI Image
 
-This charm uses the following OCI images:
-
-| Image                          | Purpose                 |
-| ------------------------------ | ----------------------- |
-| `livepatch-server:latest`      | HTTP server             |
-| `livepatch-schema-tool:latest` | Database migration tool |
+This charm uses an OCI image, built as a ROCK and published on GitHub Container Registry (GHCR) as `ghcr.io/canonical/livepatch-server`.
 
 ## Documentation
 

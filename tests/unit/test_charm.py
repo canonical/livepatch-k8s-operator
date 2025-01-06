@@ -1092,8 +1092,8 @@ class TestCharm(unittest.TestCase):
             {
                 "LP_CONTRACTS_ENABLED": True,
                 "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
+                "LP_PATCH_SYNC_ENABLED": False,
             },
-            {"LP_PATCH_SYNC_ENABLED": True},
         )
 
     def test_pro_airgapped_server_relation__multiple_units(self):
@@ -1263,7 +1263,89 @@ class TestCharm(unittest.TestCase):
                 }
             )
 
-    def _assert_environment_contains(self, contains: Dict[str, Any], not_contains: Union[List[str], None] = None):
+    def test_cve_catalog_relation__success(self):
+        """Test cve-catalog relation."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+        self.harness.charm._state.resource_token = TEST_TOKEN
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                }
+            )
+
+            cves_rel_id = self.harness.add_relation("cve-catalog", "livepatch-cve-service")
+            self.harness.add_relation_unit(cves_rel_id, "livepatch-cve-service/0")
+            self.harness.update_relation_data(
+                cves_rel_id,
+                "livepatch-cve-service",
+                {
+                    "url": "scheme://some.host.name:9999",
+                },
+            )
+
+        self._assert_environment_contains(
+            {
+                "LP_CVE_LOOKUP_ENABLED": True,
+                "LP_CVE_SYNC_ENABLED": True,
+                "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
+                "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
+            }
+        )
+
+    def test_cve_catalog_relation__relation_removed(self):
+        """Test when cve-catalog is removed."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.harness.charm._state.dsn = "postgresql://123"
+        self.harness.charm._state.resource_token = TEST_TOKEN
+
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": False,
+                }
+            )
+
+            cves_rel_id = self.harness.add_relation("cve-catalog", "livepatch-cve-service")
+            self.harness.add_relation_unit(cves_rel_id, "livepatch-cve-service/0")
+            self.harness.update_relation_data(
+                cves_rel_id,
+                "livepatch-cve-service",
+                {
+                    "url": "scheme://some.host.name:9999",
+                },
+            )
+
+            self._assert_environment_contains(
+                {
+                    "LP_CVE_LOOKUP_ENABLED": True,
+                    "LP_CVE_SYNC_ENABLED": True,
+                    "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
+                    "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
+                }
+            )
+
+            # Now we remove the relation.
+            self.harness.remove_relation(cves_rel_id)
+
+            self._assert_environment_contains(
+                {
+                    "LP_CVE_LOOKUP_ENABLED": False,
+                    "LP_CVE_SYNC_ENABLED": False,
+                },
+            )
+
+    def _assert_environment_contains(self, contains: Dict[str, Any]):
         """Assert Pebble plan environment contains given key/value pairs."""
         plan = self.harness.get_container_pebble_plan("livepatch")
         environment = plan.to_dict()["services"]["livepatch"]["environment"]

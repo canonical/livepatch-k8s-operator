@@ -100,12 +100,8 @@ class LivepatchCharm(CharmBase):
         )
 
         # Livepatch CVE service
-        self.framework.observe(
-            self.on.cve_catalog_relation_changed, self._on_cve_catalog_relation_changed
-        )
-        self.framework.observe(
-            self.on.cve_catalog_relation_broken, self._on_cve_catalog_relation_broken
-        )
+        self.framework.observe(self.on.cve_catalog_relation_changed, self._on_cve_catalog_relation_changed)
+        self.framework.observe(self.on.cve_catalog_relation_broken, self._on_cve_catalog_relation_broken)
 
         # Ingress (nginx-routes interface)
         require_nginx_route(

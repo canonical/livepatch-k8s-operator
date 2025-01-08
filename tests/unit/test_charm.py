@@ -4,7 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import unittest
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
 import yaml

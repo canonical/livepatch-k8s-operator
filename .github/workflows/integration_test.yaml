@@ -95,6 +95,7 @@ jobs:
           channel: 6.1/stable
       - name: Bootstrap a controller on the LXD cloud
         run: |
+          newgrp lxd
           juju bootstrap localhost localhost-localhost
       # We need to change the MicroK8s API address from a localhost (127.0.0.1)
       # to a concrete IP address that is accessible by LXD containers/instances,

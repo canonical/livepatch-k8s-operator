@@ -300,6 +300,11 @@ options:
     description: |
       Whether or not if this instance of Livepatch Server should lookup fixed CVEs in response to client requests.
     type: boolean
+  cve-lookup.auth-required:
+    default: false
+    description: |
+      Whether or not requests to retrieve fixed CVEs should be authenticated.
+    type: boolean
   cve-sync.enabled:
     default: false
     description: |

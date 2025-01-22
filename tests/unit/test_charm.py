@@ -1292,7 +1292,7 @@ class TestCharm(unittest.TestCase):
 
         self._assert_environment_contains(
             {
-                "LP_CVE_LOOKUP_ENABLED": True,
+                "LP_CVE_LOOKUP_ENABLED": False,  # Should not get enabled automatically.
                 "LP_CVE_SYNC_ENABLED": True,
                 "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                 "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
@@ -1328,7 +1328,7 @@ class TestCharm(unittest.TestCase):
 
             self._assert_environment_contains(
                 {
-                    "LP_CVE_LOOKUP_ENABLED": True,
+                    "LP_CVE_LOOKUP_ENABLED": False,  # Should not get enabled automatically.
                     "LP_CVE_SYNC_ENABLED": True,
                     "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                     "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.

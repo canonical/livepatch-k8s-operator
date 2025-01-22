@@ -308,7 +308,7 @@ options:
   cve-sync.enabled:
     default: false
     description: |
-      Whether or not if this instance of Livepatch Server should sync fixec CVEs data.
+      Whether or not if this instance of Livepatch Server should sync fixed CVEs data.
     type: boolean
   cve-sync.source_url:
     default: ""

@@ -233,12 +233,10 @@ class LivepatchCharm(CharmBase):
                 env_vars["LP_PATCH_SYNC_ID"] = self.model.uuid
 
         cve_service_address = self._get_available_cve_service()
-        if cve_service_address:
-            env_vars["LP_CVE_LOOKUP_ENABLED"] = True
-            if self.unit.is_leader():
-                # Note that other env vars are already set from the configuration.
-                env_vars["LP_CVE_SYNC_ENABLED"] = True
-                env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
+        if cve_service_address and self.unit.is_leader():
+            # Note that other env vars are already set from the configuration.
+            env_vars["LP_CVE_SYNC_ENABLED"] = True
+            env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
 
         # Some extra config and checks
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn

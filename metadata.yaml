@@ -46,6 +46,10 @@ requires:
   database:
     interface: postgresql_client
     limit: 1 # Most charms only handle a single PostgreSQL Application.
+  cve-catalog:
+    interface: cve-catalog
+    limit: 1
+    optional: true
   pro-airgapped-server:
     interface: livepatch-pro-airgapped-server
     limit: 1
@@ -69,11 +73,11 @@ resources:
   livepatch-server-image:
     type: oci-image
     description: OCI Image for Livepatch Server
-    upstream-source: ghcr.io/canonical/livepatch-server:v1.16.0
+    upstream-source: ghcr.io/canonical/livepatch-server:v1.17.0
   livepatch-schema-upgrade-tool-image:
     type: oci-image
     description: OCI Image for Schema upgrade tool
-    upstream-source: ghcr.io/canonical/livepatch-server:v1.16.0
+    upstream-source: ghcr.io/canonical/livepatch-server:v1.17.0
   # Temporary workaround until pebble can forward logs to Loki directly.
   promtail-bin:
     type: file

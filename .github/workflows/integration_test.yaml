@@ -18,7 +18,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --platform ubuntu-20.04-amd64_ubuntu-22.04-amd64 --destructive-mode --verbosity=trace
+        run: charmcraft pack --platform amd64 --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
@@ -61,7 +61,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --platform ubuntu-20.04-amd64_ubuntu-22.04-amd64 --destructive-mode --verbosity=trace
+        run: charmcraft pack --platform amd64 --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
@@ -89,10 +89,6 @@ jobs:
       # MicroK8s cloud to the LXD controller, so that Livepatch and
       # `pro-airgapped-server` models share the same controller and therefore
       # can be integrated with each other over a cross-model relation.
-      - name: Install LXD
-        uses: canonical/setup-lxd@v0.1.1
-        with:
-          channel: 6.1/stable
       - name: Bootstrap a controller on the LXD cloud
         run: |
           juju bootstrap localhost localhost-localhost

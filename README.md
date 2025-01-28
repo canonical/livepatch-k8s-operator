@@ -76,6 +76,14 @@ Livepatch can be optionally integrated with [`pro-airgapped-server`](https://cha
 juju integrate canonical-livepatch-server:pro-airgapped-server pro-airgapped-server
 ```
 
+### Livepatch CVE service (optional, requires)
+
+Livepatch can be optionally integrated with [Livepatch CVE service](https://charmhub.io/canonical-livepatch-cve-k8s) via the `cve-catalog` endpoint. This integration provides the Livepatch server with the information about CVEs fixed in Ubuntu kernels. The integration can be done by using this command:
+
+```sh
+juju integrate canonical-livepatch-server canonical-livepatch-cve-k8s
+```
+
 ## OCI Image
 
 This charm uses an OCI image, built as a ROCK and published on GitHub Container Registry (GHCR) as `ghcr.io/canonical/livepatch-server`.

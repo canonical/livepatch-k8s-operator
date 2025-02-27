@@ -49,5 +49,5 @@ juju add-model dev
 # Enable DEBUG logging
 juju model-config logging-config="<root>=INFO;unit=DEBUG"
 # Deploy the charm
-juju deploy ./canonical-livepatch-server-k8s_ubuntu-22.04-20.04-amd64.charm
+juju deploy ./canonical-livepatch-server-k8s_amd64.charm
 ```

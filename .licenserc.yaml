@@ -1,23 +1,13 @@
 header:
   - license:
-      copyright-owner: Canonical Ltd.
-      content: |
-        Copyright [year] [owner]
-        Licensed under the Apache2.0. See LICENSE file in charm source for details.
-    paths:
-      - 'lib/**'
-    paths-ignore:
-      - 'lib/charms/grafana_k8s/v0/**'
-    comment: on-failure
-  - license:
       spdx-id: Apache-2.0
       copyright-owner: Canonical Ltd.
       content: |
         Copyright [year] [owner]
         See LICENSE file for licensing details.
       pattern: |
-          Copyright \d{4} Canonical Ltd.
-          See LICENSE file for licensing details.
+        Copyright \d{4} Canonical Ltd.
+        See LICENSE file for licensing details.
     paths:
       - '**'
     paths-ignore:

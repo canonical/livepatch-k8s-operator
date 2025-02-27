@@ -18,7 +18,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --platform ubuntu-20.04-amd64_ubuntu-22.04-amd64 --destructive-mode --verbosity=trace
+        run: charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
@@ -61,7 +61,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --platform ubuntu-20.04-amd64_ubuntu-22.04-amd64 --destructive-mode --verbosity=trace
+        run: charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
@@ -84,18 +84,8 @@ jobs:
           echo "$REGISTRY_CONFIG" | sudo tee -a /var/snap/microk8s/current/args/containerd-template.toml
           sudo snap restart microk8s.daemon-containerd
 
-      # LXD is needed for testing the integration with `pro-airgapped-server`
-      # because there's no K8s version of this charm. We also need to add the
-      # MicroK8s cloud to the LXD controller, so that Livepatch and
-      # `pro-airgapped-server` models share the same controller and therefore
-      # can be integrated with each other over a cross-model relation.
-      - name: Install LXD
-        uses: canonical/setup-lxd@v0.1.1
-        with:
-          channel: 6.1/stable
       - name: Bootstrap a controller on the LXD cloud
-        run: |
-          juju bootstrap localhost localhost-localhost
+        run: juju bootstrap localhost localhost-localhost
       # We need to change the MicroK8s API address from a localhost (127.0.0.1)
       # to a concrete IP address that is accessible by LXD containers/instances,
       # including the controller we have just bootstrapped. Note that the output

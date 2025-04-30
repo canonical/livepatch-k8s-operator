@@ -4,12 +4,12 @@
 # Learn more about charmcraft.yaml configuration at:
 # https://juju.is/docs/sdk/charmcraft-config
 type: "charm"
-# Note that ops 2.0 requires Python 3.8+ which is only shipped on Ubuntu 20.04 and above.
 
 base: ubuntu@24.04
 platforms:
   amd64:
-
+    build-on: [amd64]
+    build-for: [amd64]
 parts:
   charm:
     build-packages: [git]

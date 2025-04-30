@@ -12,7 +12,6 @@ operator-prod-k8s:
 # NOTE: For local use only
 # Requires the schema-tool (docker-schema-tool), livepatch prod (docker), and charm (operator-prod-k8s) to be run first.
 deploy-onprem-k8s: operator-prod-k8s microk8s-push
-	juju deploy ./canonical-livepatch-server-k8s_ubuntu-20.04-amd64_ubuntu-22.04-amd64.charm \
+	juju deploy ./canonical-livepatch-server-k8s_amd64.charm \
 		--resource livepatch-schema-upgrade-tool-image=localhost:32000/livepatch-schema-tool:latest \
 		--resource livepatch-server-image=localhost:32000/livepatch-server:latest
-

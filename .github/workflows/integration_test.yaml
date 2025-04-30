@@ -69,7 +69,7 @@ jobs:
           channel: 1.30-strict/stable
           juju-channel: 2.9/stable
           provider: microk8s
-          microk8s-group: snap_microk8s
+          microk8s-group: runner
           microk8s-addons: "ingress storage dns rbac registry"
       # Instructions from https://microk8s.io/docs/registry-private
       # and https://github.com/containerd/cri/blob/master/docs/registry.md
@@ -83,12 +83,6 @@ jobs:
           EOL
           echo "$REGISTRY_CONFIG" | sudo tee -a /var/snap/microk8s/current/args/containerd-template.toml
           sudo snap restart microk8s.daemon-containerd
-
-      - name: Allow the runner to access microk8s
-        run: |
-          sudo usermod -a -G snap_microk8s runner
-          sudo chown -R runner ~/.kube
-          newgrp snap_microk8s
 
       # LXD is needed for testing the integration with `pro-airgapped-server`
       # because there's no K8s version of this charm. We also need to add the

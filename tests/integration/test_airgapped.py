@@ -111,10 +111,10 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
                 apps=[PRO_AIRGAPPED_SERVER_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600
             )
 
-            offer_name = f"{PRO_AIRGAPPED_SERVER_NAME}:{PRO_AIRGAPPED_SERVER_ENDPOINT}"
+            offer_name = "pro-airgapped-server-offer"
             logger.info("Creating application offer for cross-model relation: %s", offer_name)
             await ops_test.model.create_offer(
-                endpoint=PRO_AIRGAPPED_SERVER_ENDPOINT,
+                endpoint=f"{PRO_AIRGAPPED_SERVER_NAME}:{PRO_AIRGAPPED_SERVER_ENDPOINT}",
                 application_name=PRO_AIRGAPPED_SERVER_NAME,
                 offer_name=offer_name,
             )

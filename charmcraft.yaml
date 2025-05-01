@@ -4,7 +4,7 @@
 # Learn more about charmcraft.yaml configuration at:
 # https://juju.is/docs/sdk/charmcraft-config
 type: "charm"
-base: ubuntu@24.04
+base: ubuntu@22.04
 platforms:
   amd64:
     build-on: [amd64]

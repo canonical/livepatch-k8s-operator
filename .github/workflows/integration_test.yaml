@@ -90,7 +90,7 @@ jobs:
       # `pro-airgapped-server` models share the same controller and therefore
       # can be integrated with each other over a cross-model relation.
       - name: Bootstrap a controller on the LXD cloud
-        run: sudo juju bootstrap localhost localhost-localhost
+        run: /usr/bin/sudo -g snap_microk8s -E juju bootstrap localhost localhost-localhost
       # We need to change the MicroK8s API address from a localhost (127.0.0.1)
       # to a concrete IP address that is accessible by LXD containers/instances,
       # including the controller we have just bootstrapped. Note that the output

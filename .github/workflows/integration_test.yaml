@@ -89,6 +89,7 @@ jobs:
           sudo usermod -a -G snap_microk8s runner
           sudo chown -R runner ~/.kube
           sudo newgrp snap_microk8s
+          sleep 5
 
       # LXD is needed for testing the integration with `pro-airgapped-server`
       # because there's no K8s version of this charm. We also need to add the

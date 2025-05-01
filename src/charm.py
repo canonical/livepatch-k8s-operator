@@ -33,6 +33,7 @@ LIVEPATCH_SERVICE_NAME = "livepatch"
 DATABASE_RELATION = "database"
 DATABASE_RELATION_LEGACY = "database-legacy"
 PRO_AIRGAPPED_SERVER_RELATION = "pro-airgapped-server"
+CVE_CATALOG_RELATION = "cve-catalog"
 
 REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
@@ -97,6 +98,10 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(
             self.on.pro_airgapped_server_relation_departed, self._on_pro_airgapped_server_relation_departed
         )
+
+        # Livepatch CVE service
+        self.framework.observe(self.on.cve_catalog_relation_changed, self._on_cve_catalog_relation_changed)
+        self.framework.observe(self.on.cve_catalog_relation_broken, self._on_cve_catalog_relation_broken)
 
         # Ingress (nginx-routes interface)
         require_nginx_route(
@@ -227,6 +232,12 @@ class LivepatchCharm(CharmBase):
                 # TODO: Find a better way to identify a on-prem syncing instance.
                 env_vars["LP_PATCH_SYNC_ID"] = self.model.uuid
 
+        cve_service_address = self._get_available_cve_service()
+        if cve_service_address and self.unit.is_leader():
+            # Note that other env vars are already set from the configuration.
+            env_vars["LP_CVE_SYNC_ENABLED"] = True
+            env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
+
         # Some extra config and checks
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn
         env_vars["LP_SERVER_SERVER_ADDRESS"] = f":{SERVER_PORT}"
@@ -238,7 +249,7 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
         # remove empty environment values
-        env_vars = {key: value for key, value in env_vars.items() if value}
+        env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
         return env_vars
 
@@ -510,6 +521,23 @@ class LivepatchCharm(CharmBase):
         port = data.get("port")
         netloc = hostname + (f":{port}" if port else "")
         return urlunparse(ParseResult(scheme, netloc, "", "", "", ""))
+
+    def _on_cve_catalog_relation_changed(self, event: RelationChangedEvent):
+        """Handle cve-catalog relation-changed event."""
+        self._update_workload_container_config(event)
+
+    def _on_cve_catalog_relation_broken(self, event: RelationDepartedEvent):
+        """Handle cve-catalog relation-broken event."""
+        self._update_workload_container_config(event)
+
+    def _get_available_cve_service(self) -> Optional[str]:
+        """Return the Livepatch CVE service address, if any, taken from related app/unit."""
+        relation = self.model.get_relation(CVE_CATALOG_RELATION)
+        if not relation:
+            return None
+
+        address = relation.data.get(relation.app).get("url", "")
+        return address if address else None
 
     # Actions
     def restart_action(self, event):

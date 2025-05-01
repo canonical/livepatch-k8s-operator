@@ -114,7 +114,7 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
             offer_name = "pro-airgapped-server-offer"
             logger.info("Creating application offer for cross-model relation: %s", offer_name)
             await ops_test.model.create_offer(
-                endpoint=PRO_AIRGAPPED_SERVER_ENDPOINT,
+                endpoint=f"{PRO_AIRGAPPED_SERVER_NAME}:{PRO_AIRGAPPED_SERVER_ENDPOINT}",
                 application_name=PRO_AIRGAPPED_SERVER_NAME,
                 offer_name=offer_name,
             )
@@ -136,7 +136,7 @@ async def test_airgapped_contracts_integration(ops_test: OpsTest):
             # handles this by defaulting to the current user.
             await ops_test.juju("consume", f"{lxd_model_name}.{offer_name}")
             logger.info("Integrating Livepatch and pro-airgapped-server")
-            await ops_test.model.integrate(APP_NAME, offer_name)
+            await ops_test.model.relate(APP_NAME, offer_name)
             logger.info("Waiting for Livepatch")
             await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=600)
 

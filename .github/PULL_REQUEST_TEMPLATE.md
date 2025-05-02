@@ -11,7 +11,6 @@ Fixes *JIRA/GitHub issue number*
 - [ ] have checked and added or updated relevant release notes.
 - [ ] Covered by unit tests
 - [ ] Covered by integration tests
-- [ ] Requires corresponding livepatch-server charm change
 
 
 ## Notes for code reviewers

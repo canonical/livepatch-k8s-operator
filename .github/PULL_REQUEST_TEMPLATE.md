@@ -8,7 +8,7 @@ Fixes *JIRA/GitHub issue number*
 *Check only items that apply*
 
 - [ ] I have checked and added or updated relevant documentation.
-- [ ] have checked and added or updated relevant release notes.
+- [ ] I have checked and added or updated relevant release notes.
 - [ ] Covered by unit tests
 - [ ] Covered by integration tests
 

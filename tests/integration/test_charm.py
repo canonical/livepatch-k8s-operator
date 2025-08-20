@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 
 import logging
+import os
 
 import pytest
 import requests
@@ -37,5 +38,7 @@ async def test_charm_version_is_set(ops_test: OpsTest):
     """Test correct version is set"""
     status = await ops_test.model.get_status()
     version = status.applications[APP_NAME].charm_version
-    expected_version = extract_version_from_metadata()
+    craft_part_install = os.environ.get("CRAFT_PART_INSTALL")
+    metadata_path = os.path.join(craft_part_install, "metadata.yaml")
+    expected_version = extract_version_from_metadata(metadata_path)
     assert version == expected_version

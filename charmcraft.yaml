@@ -19,3 +19,6 @@ parts:
       - ops-lib-pgsql
       - requests
       - responses
+    override-build: |
+      craftctl default
+      yq -r 'to_entries[] | select(.key == "resources") | .value[] | .["upstream-source"]? ' metadata.yaml | awk '{ match($0, /v[0-9]+(\.[0-9]+)*/, m); print m[0] }' | head -n1 > $CRAFT_PART_INSTALL/version

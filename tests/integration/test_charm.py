@@ -7,7 +7,7 @@ import logging
 import pytest
 import requests
 from fixtures import deploy_package
-from helpers import ACTIVE_STATUS, APP_NAME
+from helpers import ACTIVE_STATUS, APP_NAME, extract_version_from_metadata
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -30,3 +30,12 @@ async def test_application_is_up(ops_test: OpsTest):
     r = requests.get(url, timeout=2.0)
     assert r.status_code == 200
     logger.info(f"Output = {r.json()}")
+
+
+@pytest.mark.abort_on_fail
+async def test_charm_version_is_set(ops_test: OpsTest):
+    """Test correct version is set"""
+    status = await ops_test.model.get_status()
+    version = status.applications[APP_NAME].charm_version
+    expected_version = extract_version_from_metadata()
+    assert version == expected_version

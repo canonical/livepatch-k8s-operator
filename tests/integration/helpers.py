@@ -138,11 +138,10 @@ def oci_image(metadata_file: str, image_name: str) -> str:
 
     return upstream_source
 
-def extract_version_from_metadata(path = '../../metadata.yaml'):
+def extract_version_from_metadata(path = 'metadata.yaml'):
     """extract the version string from the metadata.yaml file."""
     with open(path) as f:
         metadata = yaml.safe_load(f)
-
     resources = metadata.get("resources", {})
     for res in resources.values():
         upstream = res.get("upstream-source")

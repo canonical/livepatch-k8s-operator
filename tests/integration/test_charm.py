@@ -38,6 +38,6 @@ async def test_charm_version_is_set(ops_test: OpsTest):
     """Test correct version is set"""
     status = await ops_test.model.get_status()
     version = status.applications[APP_NAME].charm_version
-    metadata_path = "../../metadata.yaml"
+    metadata_path = "metadata.yaml"
     expected_version = extract_version_from_metadata(metadata_path)
     assert version == expected_version, f"expected {expected_version}, got {version}"

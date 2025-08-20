@@ -14,16 +14,6 @@ jobs:
   upload-livepatch-operator-k8s:
     runs-on: ubuntu-22.04
     steps:
-      - name: Update Server Version
-        run : |
-          bach -c '
-          echo "Updating version string...
-          yq -r 'to_entries[] | select(.key == "resources") | 
-          .value[] | .["upstream-source"]? ' metadata.yaml | 
-          head -n1 |  awk '{ match($0, /v[0-9]+(\.[0-9]+)*/, m); print m[0] }' 
-          > version 
-          echo "Updated version string to $(cat version)"
-          '
       - name: Checkout
         uses: actions/checkout@v4
       - name: Log in to the Container registry

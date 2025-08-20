@@ -41,4 +41,4 @@ async def test_charm_version_is_set(ops_test: OpsTest):
     craft_part_install = os.environ.get("CRAFT_PART_INSTALL")
     metadata_path = os.path.join(craft_part_install, "metadata.yaml")
     expected_version = extract_version_from_metadata(metadata_path)
-    assert version == expected_version
+    assert version == expected_version, f"expected {expected_version}, got {version}"

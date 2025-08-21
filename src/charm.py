@@ -253,8 +253,9 @@ class LivepatchCharm(CharmBase):
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
         return env_vars
+
     def _update_workload_version(self):
-        """Update the workload version. Version will be present in the Version column when running juju status"""
+        """Update the workload version. Version will be present in the Version column when running juju status."""
         charm_file = pathlib.Path("version")
         raw_version = charm_file.read_text(encoding="utf-8")
         version = raw_version.strip()

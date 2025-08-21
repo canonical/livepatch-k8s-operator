@@ -5,6 +5,7 @@
 # Learn more at: https://juju.is/docs/sdk
 
 """Livepatch k8s charm."""
+import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
@@ -252,6 +253,12 @@ class LivepatchCharm(CharmBase):
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
         return env_vars
+    def _update_workload_version(self):
+        """Update the workload version. Version will be present in the Version column when running juju status"""
+        charm_file = pathlib.Path("version")
+        raw_version = charm_file.read_text(encoding="utf-8")
+        version = raw_version.strip()
+        self.unit.set_workload_version(version)
 
     def _update_workload_container_config(self, event: Optional[HookEvent]):
         """
@@ -267,6 +274,9 @@ class LivepatchCharm(CharmBase):
             LOGGER.warning("State is not ready")
             return
 
+        # update version
+        self._update_workload_version()
+
         workload_container = self.unit.get_container(WORKLOAD_CONTAINER)
         if not workload_container.can_connect():
             LOGGER.info("workload container not ready - deferring")
@@ -276,6 +286,7 @@ class LivepatchCharm(CharmBase):
 
         # Quickly update logrotates config each workload update
         self._push_to_workload(LOGROTATE_CONFIG_PATH, self._get_logrotate_config(), event)
+
 
         try:
             self.handle_schema_upgrade()

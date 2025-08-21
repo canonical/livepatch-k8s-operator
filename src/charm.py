@@ -287,7 +287,6 @@ class LivepatchCharm(CharmBase):
         # Quickly update logrotates config each workload update
         self._push_to_workload(LOGROTATE_CONFIG_PATH, self._get_logrotate_config(), event)
 
-
         try:
             self.handle_schema_upgrade()
         except DeferError:

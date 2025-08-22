@@ -16,7 +16,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
-from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent
+from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, RelationDataContent, WaitingStatus
 
@@ -88,6 +88,10 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.database.on.database_created, self._on_database_event)
         self.framework.observe(
             self.database.on.endpoints_changed,
+            self._on_database_event,
+        )
+        self.framework.observe(
+            self.on.database_relation_changed,
             self._on_database_event,
         )
 
@@ -438,12 +442,12 @@ class LivepatchCharm(CharmBase):
     def _is_database_relation_activated(self) -> bool:
         return len(self.model.relations[DATABASE_RELATION]) > 0
 
-    def _on_database_event(self, event) -> None:
+    def _on_database_event(self, event: RelationEvent) -> None:
         """Database event handler."""
         if not self.model.unit.is_leader():
             return
 
-        LOGGER.info("(postgresql) RELATION_JOINED event fired.")
+        LOGGER.info("(postgresql) %s event fired.", event.relation.name)
 
         if not self._state.is_ready():
             event.defer()
@@ -457,18 +461,18 @@ class LivepatchCharm(CharmBase):
                 f"`{DATABASE_RELATION_LEGACY}` is already activated."
             )
 
-        if event.username is None or event.password is None:
+        dbconn = self._get_db_info()
+        if dbconn is None:
+            LOGGER.info("no database connection info found, deferring event")
             event.defer()
-            LOGGER.info(
-                "(postgresql) Relation data is not complete (missing `username` or `password` field); "
-                "deferring the event."
-            )
             return
 
-        # get the first endpoint from a comma separate list
-        ep = event.endpoints.split(",", 1)[0]
+        ep = dbconn["endpoint"]
+        user = dbconn["user"]
+        password = dbconn["password"]
+
         # compose the db connection string
-        uri = f"postgresql://{event.username}:{event.password}@{ep}/{DATABASE_NAME}"
+        uri = f"postgresql://{user}:{password}@{ep}/{DATABASE_NAME}"
 
         LOGGER.info(f"received database uri: {uri}")
 
@@ -476,6 +480,38 @@ class LivepatchCharm(CharmBase):
         self._state.dsn = uri
 
         self._update_workload_container_config(event)
+
+    def _get_db_info(self) -> Optional[Dict]:
+        """Get database connection info by reading relation data."""
+        if (
+            len(self.database.relations) == 0
+            or not self.database.is_resource_created()
+        ):
+            LOGGER.debug(
+                "no (postgresql) database relation found or resource not created"
+            )
+            return None
+
+        db_relation_id = self.database.relations[0].id
+        relation_data = self.database.fetch_relation_data().get(
+            db_relation_id, None
+        )
+        if not relation_data:
+            LOGGER.debug(
+                "no relation data found for relation %s", db_relation_id
+            )
+            return None
+
+        LOGGER.debug(
+            "database endpoints: %s", relation_data.get("endpoints")
+        )
+        endpoint = relation_data.get("endpoints").split(",")[0]
+        LOGGER.info("database endpoint: %s", endpoint)
+        return {
+            "endpoint": endpoint,
+            "password": relation_data.get("password"),
+            "user": relation_data.get("username"),
+        }
 
     def _on_pro_airgapped_server_relation_changed(self, event: RelationChangedEvent):
         """Handle pro-airgapped-server relation-changed event."""

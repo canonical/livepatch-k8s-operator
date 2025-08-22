@@ -1,11 +1,12 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
-
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
+import os
 import unittest
 from typing import Any, Dict, List
 from unittest.mock import Mock, patch
+import pathlib
 
 import yaml
 from ops import pebble
@@ -53,6 +54,11 @@ class TestCharm(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(LivepatchCharm)
         self.addCleanup(self.harness.cleanup)
+
+        # create version file
+        self.version_file = pathlib.Path("version")
+        pathlib.Path.touch(self.version_file)
+        self.addCleanup( lambda: os.remove(self.version_file ) )
 
         self.harness.disable_hooks()
         self.harness.add_oci_resource("livepatch-server-image")

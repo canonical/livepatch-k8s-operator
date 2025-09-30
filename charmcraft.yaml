@@ -20,11 +20,11 @@ parts:
       - requests
       - responses
     override-build: |
-      # 1. Install yq and GNU awk
-      snap install yq
+      # 1. Install yq and GNU awk.
+      sudo snap install yq
 
-      # 2. Run the default charm build steps
+      # 2. Run the default charm build steps.
       craftctl default
 
-      # 3. Get the image version and store it in the version file to be picked up by Juju
+      # 3. Get the image version and store it in the version file to be picked up by Juju.
       yq -r 'to_entries[] | select(.key == "resources") | .value[] | .["upstream-source"]? ' metadata.yaml | awk '{ match($0, /v[0-9]+(\.[0-9]+)*/, m); print m[0] }' | head -n1 > $CRAFT_PART_INSTALL/version

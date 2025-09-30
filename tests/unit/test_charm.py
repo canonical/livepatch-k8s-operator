@@ -3,10 +3,10 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import os
+import pathlib
 import unittest
 from typing import Any, Dict, List
 from unittest.mock import Mock, patch
-import pathlib
 
 import yaml
 from ops import pebble
@@ -58,7 +58,7 @@ class TestCharm(unittest.TestCase):
         # create version file
         self.version_file = pathlib.Path("version")
         pathlib.Path.touch(self.version_file)
-        self.addCleanup( lambda: os.remove(self.version_file ) )
+        self.addCleanup(lambda: os.remove(self.version_file))
 
         self.harness.disable_hooks()
         self.harness.add_oci_resource("livepatch-server-image")
@@ -1302,6 +1302,7 @@ class TestCharm(unittest.TestCase):
                 "LP_CVE_SYNC_ENABLED": True,
                 "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                 "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
+                "LP_CVE_SYNC_TIMEOUT": "5m", # Default config value.
             }
         )
 
@@ -1338,6 +1339,7 @@ class TestCharm(unittest.TestCase):
                     "LP_CVE_SYNC_ENABLED": True,
                     "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                     "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
+                    "LP_CVE_SYNC_TIMEOUT": "5m", # Default config value.
                 }
             )
 

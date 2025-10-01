@@ -2,12 +2,12 @@
 # See LICENSE file for licensing details.
 
 import logging
-import yaml
 import re
 import uuid
 from pathlib import Path
 from typing import Literal, Union
 
+import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from pytest_operator.plugin import OpsTest
 
@@ -138,7 +138,8 @@ def oci_image(metadata_file: str, image_name: str) -> str:
 
     return upstream_source
 
-def extract_version_from_metadata(path = 'metadata.yaml'):
+
+def extract_version_from_metadata(path="metadata.yaml"):
     """extract the version string from the metadata.yaml file."""
     with open(path) as f:
         metadata = yaml.safe_load(f)

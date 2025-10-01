@@ -494,28 +494,17 @@ class LivepatchCharm(CharmBase):
 
     def _get_db_info(self) -> Optional[Dict]:
         """Get database connection info by reading relation data."""
-        if (
-            len(self.database.relations) == 0
-            or not self.database.is_resource_created()
-        ):
-            LOGGER.debug(
-                "no (postgresql) database relation found or resource not created"
-            )
+        if len(self.database.relations) == 0 or not self.database.is_resource_created():
+            LOGGER.debug("no (postgresql) database relation found or resource not created")
             return None
 
         db_relation_id = self.database.relations[0].id
-        relation_data = self.database.fetch_relation_data().get(
-            db_relation_id, None
-        )
+        relation_data = self.database.fetch_relation_data().get(db_relation_id, None)
         if not relation_data:
-            LOGGER.debug(
-                "no relation data found for relation %s", db_relation_id
-            )
+            LOGGER.debug("no relation data found for relation %s", db_relation_id)
             return None
 
-        LOGGER.debug(
-            "database endpoints: %s", relation_data.get("endpoints")
-        )
+        LOGGER.debug("database endpoints: %s", relation_data.get("endpoints"))
         endpoint = relation_data.get("endpoints").split(",")[0]
         LOGGER.info("database endpoint: %s", endpoint)
         return {

@@ -319,6 +319,12 @@ options:
     default: "1h"
     description: Period between automatic refreshing of fixed CVE data.
     type: string
+  cve-sync.timeout:
+    default: "5m"
+    description: |
+      Timeout for the CVE sync client. The CVE sync will timeout if the CVE service
+      takes longer than the timeout defined, to send the CVE data.
+    type: string
   cve-sync.proxy.enabled:
     default: false
     description: Whether or not to proxy fixed CVE data syncs.

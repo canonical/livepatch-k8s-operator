@@ -33,6 +33,7 @@ jobs:
   promote:
     name: Promote Charm for base ${{ inputs.base-channel }}
     uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@main
+    environment: ${{ inputs.destination-channel }}
     with:
       origin-channel: ${{ inputs.origin-channel }}
       destination-channel: ${{ inputs.destination-channel }}

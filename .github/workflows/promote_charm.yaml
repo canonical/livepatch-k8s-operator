@@ -34,6 +34,8 @@ jobs:
     name: Get Approval
     runs-on: ubuntu-latest
     environment: ${{ inputs.destination-channel }}
+    outputs:
+      approved: ${{ steps.set-output.outputs.approved }}
     steps:
       - name: Set approval flag
         id: set-output

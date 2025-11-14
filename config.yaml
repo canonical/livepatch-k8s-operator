@@ -418,11 +418,11 @@ options:
     type: string
 
   cloud_delay.enabled:
-    description: "Whether to enable the delayed roll-out of patches based on a client's cloud."
+    description: "[DEPRECATED] Whether to enable the delayed roll-out of patches based on a client's cloud. The cloud delay feature is deprecated and is no longer supported."
     type: boolean
     default: false
   cloud_delay.default_delay_hours:
-    description: "Default delay hours for clouds/regions/azs without predefined delay hours."
+    description: "[DEPRECATED] Default delay hours for clouds/regions/azs without predefined delay hours. The cloud delay feature is deprecated and is no longer supported."
     type: int
     default: 0
 

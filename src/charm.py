@@ -634,7 +634,6 @@ class LivepatchCharm(CharmBase):
                 command=[
                     "/usr/local/bin/livepatch-schema-tool",
                     "upgrade",
-                    "/etc/livepatch/schema-upgrades",
                     "--db",
                     conn_str,
                 ],
@@ -691,7 +690,6 @@ class LivepatchCharm(CharmBase):
                 command=[
                     "/usr/local/bin/livepatch-schema-tool",
                     "check",
-                    "/etc/livepatch/schema-upgrades",
                     "--db",
                     conn_str,
                 ],

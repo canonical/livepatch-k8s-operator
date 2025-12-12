@@ -42,7 +42,7 @@ def mock_exec(_, command, environment) -> MockOutput:
     cmd: str = command[0]
     if cmd == "/usr/bin/pg_isready":
         return MockOutput(0, "")
-    if cmd == "/usr/local/bin/livepatch-schema-tool upgrade /usr/src/livepatch/schema-upgrades":
+    if cmd == "/usr/local/bin/livepatch-schema-tool upgrade":
         return MockOutput("", "")
     return MockOutput("", "unexpected command")
 
@@ -197,7 +197,6 @@ class TestCharm(unittest.TestCase):
                 [
                     "/usr/local/bin/livepatch-schema-tool",
                     "upgrade",
-                    "/etc/livepatch/schema-upgrades",
                     "--db",
                     "postgresql://123",
                 ],
@@ -235,7 +234,6 @@ class TestCharm(unittest.TestCase):
                 [
                     "/usr/local/bin/livepatch-schema-tool",
                     "upgrade",
-                    "/etc/livepatch/schema-upgrades",
                     "--db",
                     "postgresql://123",
                 ],
@@ -333,7 +331,6 @@ class TestCharm(unittest.TestCase):
                 [
                     "/usr/local/bin/livepatch-schema-tool",
                     "check",
-                    "/etc/livepatch/schema-upgrades",
                     "--db",
                     "postgresql://123",
                 ],
@@ -373,7 +370,6 @@ class TestCharm(unittest.TestCase):
                 [
                     "/usr/local/bin/livepatch-schema-tool",
                     "check",
-                    "/etc/livepatch/schema-upgrades",
                     "--db",
                     "postgresql://123",
                 ],
@@ -414,7 +410,6 @@ class TestCharm(unittest.TestCase):
                 [
                     "/usr/local/bin/livepatch-schema-tool",
                     "check",
-                    "/etc/livepatch/schema-upgrades",
                     "--db",
                     "postgresql://123",
                 ],

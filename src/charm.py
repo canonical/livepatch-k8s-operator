@@ -24,6 +24,7 @@ from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, Relati
 
 import utils
 from constants import LOGGER, SCHEMA_UPGRADE_CONTAINER, WORKLOAD_CONTAINER
+from legacy_constants import map_old_config_to_new_config
 from state import State
 
 SERVER_PORT = 8080
@@ -780,7 +781,7 @@ class LivepatchCharm(CharmBase):
             event.fail(f"Failed to parse YAML: {str(e)}")
             return
         try:
-            result = utils.map_old_config_to_new_config(config_yaml)
+            result = map_old_config_to_new_config(config_yaml)
             event.set_results({"result": result})
             return
         except ValueError as e:

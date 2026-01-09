@@ -779,10 +779,13 @@ class LivepatchCharm(CharmBase):
         except yaml.YAMLError as e:
             event.fail(f"Failed to parse YAML: {str(e)}")
             return
-        new_conf = utils.map_old_config_to_new_config(config_yaml)
-        if not new_conf:
-            event.fail("failed to map old config to new config")
-        event.set_results({"result": new_conf})
+        try:
+            result = utils.map_old_config_to_new_config(config_yaml)
+            event.set_results({"result": result})
+            return
+        except ValueError as e:
+            event.fail(f"Failed to map old config to new config: {str(e)}")
+            return
 
     def set_status_and_log(self, msg, status) -> None:
         """Log and set unit status."""

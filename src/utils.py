@@ -281,12 +281,12 @@ def get_system_information() -> dict:
     return system_information
 
 
-def map_old_config_to_new_config(conf : dict) -> str | None:
+def map_old_config_to_new_config(conf : dict) -> dict:
     settings = conf.get("options", {})
     if settings == {}:
         settings = conf.get("settings", {})
     if settings == {}:
-        return None
+        raise ValueError("No valid key for configuration found.")
     converted_options = {}
     removed_keys = []
     unrecognized_keys = []
@@ -315,7 +315,13 @@ def map_old_config_to_new_config(conf : dict) -> str | None:
             current, override = value
             if converted_options[key] == current:
                 converted_options[key] = override
-    new_config = {
+    # config file needs to have `canonical-livepatch-server-k8s` as the root in order to read properly.
+    config = {
         "canonical-livepatch-server-k8s": converted_options
     }
-    return yaml.dump(new_config).strip()
+    result = {
+        "new-config": yaml.dump(config).strip(),
+        "removed-keys": removed_keys,
+        "unrecognized-keys":  unrecognized_keys,
+    }
+    return result

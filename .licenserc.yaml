@@ -39,4 +39,5 @@ header:
       - 'trivy.yaml'
       - 'zap_rules.tsv'
       - 'lib/**'
+      - 'tests/unit/test-data'
     comment: on-failure

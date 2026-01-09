@@ -771,6 +771,7 @@ class LivepatchCharm(CharmBase):
         event.set_results({"result": "resource token set"})
 
     def emit_updated_config_action(self, event: ActionEvent):
+        """Convert a legacy reactive charm config to the current ops charm config """
         config_content = event.params["config-file"]
         try:
             config_yaml = yaml.safe_load(config_content)

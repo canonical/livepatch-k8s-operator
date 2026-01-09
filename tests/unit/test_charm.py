@@ -22,6 +22,8 @@ TEST_TOKEN = "test-token"  # nosec
 TEST_CA_CERT = "VGVzdCBDQSBDZXJ0Cg=="
 TEST_CA_CERT_1 = "TmV3IFRlc3QgQ0EgQ2VydAo="
 
+TEST_OLD_REACTIVE_CONFIG = "./tests/unit/test-data/old_config.yaml"
+EXPECTED_OPS_CONFIG = "./tests/unit/test-data/expected_config.yaml"
 
 class MockOutput:
     """A wrapper class for command output and errors."""
@@ -457,6 +459,27 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(self.harness.charm._state.resource_token, "some-resource-token")
         self.assertEqual(output.results, {"result": "resource token set"})
+
+    def test_emmit_updated_config__success(self):
+        """Test the scenario where `emmit-updated-config` action finishes successfully."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+        self.maxDiff = None
+        self.start_container()
+
+        old_config = ""
+        new_config = ""
+
+        with open(TEST_OLD_REACTIVE_CONFIG, 'r') as f:
+            old_config = f.read().strip()
+
+        with open(EXPECTED_OPS_CONFIG, 'r') as f:
+            new_config = f.read().strip()
+
+
+        output = self.harness.run_action("emmit-updated-config", {"config-file": old_config})
+
+        self.assertEqual(output.results, {"result": new_config})
 
     def test_get_resource_token_action__failure__non_leader_unit(self):
         """Test the scenario where `get-resource-token` action fails because unit is not leader."""

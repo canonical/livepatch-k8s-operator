@@ -9,6 +9,7 @@ import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
+import yaml
 
 import pgsql
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
@@ -71,6 +72,7 @@ class LivepatchCharm(CharmBase):
 
         self.framework.observe(self.on.get_resource_token_action, self.get_resource_token_action)
 
+        self.framework.observe(self.on.emmit_updated_config_action, self.emmit_updated_config_action)
         # Legacy database support
         self.legacy_db = pgsql.PostgreSQLClient(self, DATABASE_RELATION_LEGACY)
         self.framework.observe(
@@ -766,6 +768,21 @@ class LivepatchCharm(CharmBase):
         self._update_workload_container_config(None)
 
         event.set_results({"result": "resource token set"})
+
+    def emmit_updated_config_action(self, event: ActionEvent):
+        config_content = event.params["config-file"]
+        try:
+            config_yaml = yaml.safe_load(config_content)
+            if not (isinstance(config_yaml, dict) and config_yaml.keys()):
+                event.fail(f"invalid config file format. Got content {config_content}")
+                return
+        except yaml.YAMLError as e:
+            event.fail(f"Failed to parse YAML: {str(e)}")
+            return
+        new_conf = utils.map_old_config_to_new_config(config_yaml)
+        if not new_conf:
+            event.fail("failed to map old config to new config")
+        event.set_results({"result": new_conf})
 
     def set_status_and_log(self, msg, status) -> None:
         """Log and set unit status."""

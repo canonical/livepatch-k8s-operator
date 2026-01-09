@@ -469,7 +469,7 @@ class TestCharm(unittest.TestCase):
         old_config = "invalid"
 
         with self.assertRaises(ActionFailed) as ex:
-            self.harness.run_action("emmit-updated-config", {"config-file": old_config})
+            self.harness.run_action("emit-updated-config", {"config-file": old_config})
 
         self.assertEqual(
             ex.exception.message,
@@ -500,7 +500,7 @@ settings:
     value:"""
 
         with self.assertRaises(ActionFailed) as ex:
-            self.harness.run_action("emmit-updated-config", {"config-file": old_config})
+            self.harness.run_action("emit-updated-config", {"config-file": old_config})
 
         self.assertEqual(
             ex.exception.message,
@@ -524,7 +524,7 @@ settings:
             new_config = f.read().strip()
 
 
-        output = self.harness.run_action("emmit-updated-config", {"config-file": old_config})
+        output = self.harness.run_action("emit-updated-config", {"config-file": old_config})
 
         expected_dict = {
             "new-config": new_config,

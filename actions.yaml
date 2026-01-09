@@ -20,7 +20,7 @@ get-resource-token:
       default: ""
   required: ["contract-token"]
 
-emmit-updated-config:
+emit-updated-config:
   description: Generate new yaml config based on old reactive charm config.
   params:
     config-file:

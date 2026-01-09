@@ -72,7 +72,7 @@ class LivepatchCharm(CharmBase):
 
         self.framework.observe(self.on.get_resource_token_action, self.get_resource_token_action)
 
-        self.framework.observe(self.on.emmit_updated_config_action, self.emmit_updated_config_action)
+        self.framework.observe(self.on.emit_updated_config_action, self.emit_updated_config_action)
         # Legacy database support
         self.legacy_db = pgsql.PostgreSQLClient(self, DATABASE_RELATION_LEGACY)
         self.framework.observe(
@@ -769,7 +769,7 @@ class LivepatchCharm(CharmBase):
 
         event.set_results({"result": "resource token set"})
 
-    def emmit_updated_config_action(self, event: ActionEvent):
+    def emit_updated_config_action(self, event: ActionEvent):
         config_content = event.params["config-file"]
         try:
             config_yaml = yaml.safe_load(config_content)

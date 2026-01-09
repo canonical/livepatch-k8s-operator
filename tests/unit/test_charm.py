@@ -460,6 +460,53 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.charm._state.resource_token, "some-resource-token")
         self.assertEqual(output.results, {"result": "resource token set"})
 
+    def test_emmit_updated_config__failure_bad_format(self):
+        """Test the scenario where `emmit-updated-config` action fails due to bad yaml formatting."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+        self.start_container()
+
+        old_config = "invalid"
+
+        with self.assertRaises(ActionFailed) as ex:
+            self.harness.run_action("emmit-updated-config", {"config-file": old_config})
+
+        self.assertEqual(
+            ex.exception.message,
+            "invalid config file format. Got content invalid"
+        )
+
+    def test_emmit_updated_config__failure_missing_value(self):
+        """Test the scenario where `emmit-updated-config` action fails."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+        self.start_container()
+
+        old_config = """application: canonical-livepatch-server
+application-config:
+  trust:
+    default: false
+    description: Does this application have access to trusted credentials
+    source: default
+    type: bool
+    value: false
+charm: canonical-livepatch-server
+settings:
+  auth_basic_users:
+    default: ""
+    description: Comma-separated list of <user>:<bcrypt password hash> pairs.
+    source: default
+    type: string
+    value:"""
+
+        with self.assertRaises(ActionFailed) as ex:
+            self.harness.run_action("emmit-updated-config", {"config-file": old_config})
+
+        self.assertEqual(
+            ex.exception.message,
+            "Failed to map old config to new config: auth_basic_users doesn't have a set value for it"
+        )
+
     def test_emmit_updated_config__success(self):
         """Test the scenario where `emmit-updated-config` action finishes successfully."""
         self.harness.set_leader(True)
@@ -479,7 +526,13 @@ class TestCharm(unittest.TestCase):
 
         output = self.harness.run_action("emmit-updated-config", {"config-file": old_config})
 
-        self.assertEqual(output.results, {"result": new_config})
+        expected_dict = {
+            "new-config": new_config,
+            "removed-keys": ["psql_dbname", "psql_roles"],
+            "unrecognized-keys": ["filestore_path","nagios_context","nagios_servicegroups", "port"],
+        }
+
+        self.assertEqual(output.results, {"result": expected_dict})
 
     def test_get_resource_token_action__failure__non_leader_unit(self):
         """Test the scenario where `get-resource-token` action fails because unit is not leader."""

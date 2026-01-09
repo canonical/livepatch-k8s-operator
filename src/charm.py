@@ -778,15 +778,14 @@ class LivepatchCharm(CharmBase):
                 event.fail(f"invalid config file format. Got content {config_content}")
                 return
         except yaml.YAMLError as e:
-            event.fail(f"Failed to parse YAML: {str(e)}")
+            event.fail(f"Failed to parse YAML: {e}")
             return
         try:
             result = map_old_config_to_new_config(config_yaml)
-            event.set_results({"result": result})
-            return
         except ValueError as e:
-            event.fail(f"Failed to map old config to new config: {str(e)}")
+            event.fail(f"Failed to map old config to new config: {e}")
             return
+        event.set_results({"result": result})
 
     def set_status_and_log(self, msg, status) -> None:
         """Log and set unit status."""

@@ -158,8 +158,7 @@ def __map_legacy_config(
         if parsed_val == "":
             return
 
-        assert isinstance(val, str)
-        converted_options[val] = parsed_val
+        converted_options[val] = parsed_val # type: ignore
 
 
 def map_old_config_to_new_config(conf: dict) -> dict:

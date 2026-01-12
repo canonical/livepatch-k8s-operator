@@ -154,7 +154,6 @@ def __map_legacy_config(
     - Unknown keys are appended to `unrecognized_keys`.
     - Deprecated keys are appended to `removed_keys`.
     """
-    
     # Set additional config entries only if the key has a non-empty value.
     if parsed_val not in [None, ""]:
         additional_map_v = ADDITIONAL_CONFIG_MAP.get(key)

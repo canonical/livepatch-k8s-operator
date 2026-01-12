@@ -7,7 +7,7 @@ on:
 jobs:
   integration-test:
     name: Integration tests (MicroK8s controller)
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux, X64, xlarge, jammy]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
         uses: canonical/charming-actions/dump-logs@main
   integration-test-airgapped:
     name: Airgapped integration tests (LXD controller)
-    runs-on: ubuntu-22.04
+    runs-on: [ self-hosted, self-hosted-linux-amd64-jammy-private-endpoint-medium ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

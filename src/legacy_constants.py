@@ -4,7 +4,9 @@
 """Module containing logic for converting from the legacy machine charm config to new config format."""
 
 import yaml
-
+from typing import (Any,
+                    Dict,
+                    List)
 # Config map for converting from old reactive charm configs to the modern config format.
 CONFIG_MAP = {
     # Authentication
@@ -137,6 +139,42 @@ OVERRIDE_VALUES = {
 _MISSING = object()
 
 
+def __map_legacy_config(
+    key: str,
+    parsed_val: Any,
+    unrecognized_keys: List[str],
+    removed_keys: List[str],
+    converted_options: Dict[str, Any]
+) -> None:
+    """
+    Migrates a legacy configuration key to the new format.
+
+    Depending on the mapping logic, the result is appended in-place to one of the provided output lists.
+    - Valid mappings are appended to `converted_options`.
+    - Unknown keys are appended to `unrecognized_keys`.
+    - Deprecated keys are appended to `removed_keys`.
+    """
+    
+    # Set additional config entries only if the key has a non-empty value.
+    if parsed_val not in [None, ""]:
+        additional_map_v = ADDITIONAL_CONFIG_MAP.get(key)
+        if additional_map_v:
+            add_conf_key, add_conf_val = additional_map_v
+            converted_options[add_conf_key] = add_conf_val
+
+    # ensure we check if key exists and for truthiness.
+    val = CONFIG_MAP.get(key, _MISSING)
+    if val is _MISSING:
+        unrecognized_keys.append(key)
+    elif not val:
+        removed_keys.append(key)
+    else:
+        if parsed_val is None:
+            raise ValueError(f"{key} doesn't have a set value for it")
+        if parsed_val == "":
+            return
+        converted_options[val] = parsed_val
+
 def map_old_config_to_new_config(conf: dict) -> dict:
     """Convert old reactive charm config options to new ops charm config options."""
     settings = conf.get("options", {})
@@ -149,26 +187,7 @@ def map_old_config_to_new_config(conf: dict) -> dict:
     unrecognized_keys = []
     for key, val in settings.items():
         parsed_val = val.get("value", None)
-
-        # Set additional config entries only if the key has a non-empty value.
-        if parsed_val not in [None, ""]:
-            additional_map_v = ADDITIONAL_CONFIG_MAP.get(key)
-            if additional_map_v:
-                add_conf_key, add_conf_val = additional_map_v
-                converted_options[add_conf_key] = add_conf_val
-
-        # ensure we check if key exists and for truthiness.
-        val = CONFIG_MAP.get(key, _MISSING)
-        if val is _MISSING:
-            unrecognized_keys.append(key)
-        elif not val:
-            removed_keys.append(key)
-        else:
-            if parsed_val is None:
-                raise ValueError(f"{key} doesn't have a set value for it")
-            if parsed_val == "":
-                continue
-            converted_options[val] = parsed_val
+        __map_legacy_config(key, parsed_val, unrecognized_keys, removed_keys, converted_options)
 
     for key, value in OVERRIDE_VALUES.items():
         if key in converted_options:

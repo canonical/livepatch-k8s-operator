@@ -7,6 +7,7 @@ import yaml
 from typing import (Any,
                     Dict,
                     List)
+
 # Config map for converting from old reactive charm configs to the modern config format.
 CONFIG_MAP = {
     # Authentication
@@ -14,19 +15,16 @@ CONFIG_MAP = {
     "auth_lp_teams": "auth.sso.teams",
     "auth_sso_location": "auth.sso.url",
     "auth_sso_public_key": "auth.sso.public-key",
-
     # Server
     "burst_limit": "server.burst-limit",
     "concurrency_limit": "server.concurrency-limit",
     "log_level": "server.log-level",
     "url_template": "server.url-template",
-
     # Database / connection pool
     "dbconn_max_lifetime": "database.connection-lifetime-max",
     "dbconn_max": "database.connection-pool-max",
     "psql_dbname": None,
     "psql_roles": None,
-
     # Patch sync
     "patch_sync_enabled": "patch-sync.enabled",
     "sync_flavors": "patch-sync.flavors",
@@ -39,12 +37,10 @@ CONFIG_MAP = {
     "sync_identity": None,
     "sync_tier": None,
     "sync_upstream_tier": None,
-
     # Patch sync proxies
     "http_proxy": "patch-sync.proxy.http",
     "https_proxy": "patch-sync.proxy.https",
     "no_proxy": "patch-sync.proxy.no-proxy",
-
     # Patch storage
     "patchstore": "patch-storage.type",
     "storage_path": "patch-storage.filesystem-path",
@@ -61,15 +57,12 @@ CONFIG_MAP = {
     "swift_region_name": "patch-storage.swift-region",
     "swift_tenant_name": "patch-storage.swift-tenant",
     "swift_username": "patch-storage.swift-username",
-
     # Patch cache
     "patch_cache_on": "patch-cache.enabled",
     "patch_cache_size": "patch-cache.cache-size",
     "patch_cache_ttl": "patch-cache.cache-ttl",
-
     # Blocklist cache
     "blocklist_cache_refresh": "patch-blocklist.refresh-interval",
-
     # Machine reports
     "event_bus_brokers": "machine-reports.event-bus.brokers",
     "event_bus_ca_cert": "machine-reports.event-bus.ca-cert",
@@ -78,15 +71,12 @@ CONFIG_MAP = {
     "report_cleanup_interval": "machine-reports.database.cleanup-interval",
     "report_cleanup_row_limit": "machine-reports.database.cleanup-row-limit",
     "report_retention": "machine-reports.database.retention-days",
-
     # KPI reports
     "kpi_reports": "kpi-reports.interval",
-
     # Contracts
     "contract_server_password": "contracts.password",
     "contract_server_url": "contracts.url",
     "contract_server_user": "contracts.user",
-
     # Profiler settings
     "profiler_block_profile_rate": "profiler.block_profile_rate",
     "profiler_enabled": "profiler.enabled",
@@ -100,7 +90,6 @@ CONFIG_MAP = {
     "profiler_sample_rate": "profiler.sample_rate",
     "profiler_server_address": "profiler.server_address",
     "profiler_upload_rate": "profiler.upload_rate",
-
     # Cloud delay (no longer used)
     "cloud_delay_default_delay_hours": None,
     "is_cloud_delay_enabled": None,
@@ -140,11 +129,7 @@ _MISSING = object()
 
 
 def __map_legacy_config(
-    key: str,
-    parsed_val: Any,
-    unrecognized_keys: List[str],
-    removed_keys: List[str],
-    converted_options: Dict[str, Any]
+    key: str, parsed_val: Any, unrecognized_keys: List[str], removed_keys: List[str], converted_options: Dict[str, Any]
 ) -> None:
     """
     Migrates a legacy configuration key to the new format.
@@ -172,7 +157,10 @@ def __map_legacy_config(
             raise ValueError(f"{key} doesn't have a set value for it")
         if parsed_val == "":
             return
+
+        assert isinstance(val, str)
         converted_options[val] = parsed_val
+
 
 def map_old_config_to_new_config(conf: dict) -> dict:
     """Convert old reactive charm config options to new ops charm config options."""
@@ -181,9 +169,10 @@ def map_old_config_to_new_config(conf: dict) -> dict:
         settings = conf.get("settings", {})
     if settings == {}:
         raise ValueError("No valid key for configuration found.")
-    converted_options = {}
-    removed_keys = []
-    unrecognized_keys = []
+    converted_options: Dict[str, Any] = {}
+    removed_keys: List[str] = []
+    unrecognized_keys: List[str] = []
+
     for key, val in settings.items():
         parsed_val = val.get("value", None)
         __map_legacy_config(key, parsed_val, unrecognized_keys, removed_keys, converted_options)

@@ -4,16 +4,18 @@
 """Utils module."""
 
 import csv
+import json
 import os
 import platform
 import tempfile
 import typing as t
-import json
+
 import requests
 
 
 DEFAULT_CONTRACTS_URL = "https://contracts.canonical.com"
 RESOURCE_NAME = "livepatch-onprem"
+
 
 def map_config_to_env_vars(charm, **additional_env):
     """

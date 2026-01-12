@@ -1,6 +1,10 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
+
+"""Module containing logic for converting from the legacy machine charm config to new config format."""
+
 import yaml
+
 # Config map for converting from old reactive charm configs to the modern config format.
 CONFIG_MAP = {
     # Authentication

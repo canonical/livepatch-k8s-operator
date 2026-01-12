@@ -50,7 +50,7 @@ jobs:
         uses: canonical/charming-actions/dump-logs@main
   integration-test-airgapped:
     name: Airgapped integration tests (LXD controller)
-    runs-on: [ self-hosted, self-hosted-linux-amd64-jammy-private-endpoint-medium ]
+    runs-on: [self-hosted, linux, X64, xlarge, jammy]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

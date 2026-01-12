@@ -9,12 +9,8 @@ import platform
 import tempfile
 import typing as t
 import json
-import yaml
-
-
 import requests
 
-from src.constants import CONFIG_MAP,ADDITIONAL_CONFIG_MAP,OVERRIDE_VALUES
 
 DEFAULT_CONTRACTS_URL = "https://contracts.canonical.com"
 RESOURCE_NAME = "livepatch-onprem"

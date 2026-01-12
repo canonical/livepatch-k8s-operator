@@ -133,7 +133,11 @@ OVERRIDE_VALUES = {
     "patch-storage.type": ("file", "filesystem"),
 }
 
-def map_old_config_to_new_config(conf : dict) -> dict:
+# Sentinel object used to optimize dict lookups.
+_MISSING = object()
+
+
+def map_old_config_to_new_config(conf: dict) -> dict:
     """Convert old reactive charm config options to new ops charm config options."""
     settings = conf.get("options", {})
     if settings == {}:
@@ -143,7 +147,6 @@ def map_old_config_to_new_config(conf : dict) -> dict:
     converted_options = {}
     removed_keys = []
     unrecognized_keys = []
-    skip_count = 0
     for key, val in settings.items():
         parsed_val = val.get("value", None)
 
@@ -154,17 +157,16 @@ def map_old_config_to_new_config(conf : dict) -> dict:
                 add_conf_key, add_conf_val = additional_map_v
                 converted_options[add_conf_key] = add_conf_val
 
-        missing = object()
-        val = CONFIG_MAP.get(key, missing)
-        if val is missing:
+        # ensure we check if key exists and for truthiness.
+        val = CONFIG_MAP.get(key, _MISSING)
+        if val is _MISSING:
             unrecognized_keys.append(key)
         elif not val:
             removed_keys.append(key)
         else:
             if parsed_val is None:
                 raise ValueError(f"{key} doesn't have a set value for it")
-            elif parsed_val == "":
-                skip_count += 1
+            if parsed_val == "":
                 continue
             converted_options[val] = parsed_val
 
@@ -173,13 +175,9 @@ def map_old_config_to_new_config(conf : dict) -> dict:
             current, override = value
             if converted_options[key] == current:
                 converted_options[key] = override
-    # config file needs to have `canonical-livepatch-server-k8s` as the root in order to read properly.
-    config = {
-        "canonical-livepatch-server-k8s": converted_options
-    }
-    result = {
-        "new-config": yaml.dump(config).strip(),
+    return {
+        # config file needs to have `canonical-livepatch-server-k8s` as the root in order to read properly.
+        "new-config": yaml.dump({"canonical-livepatch-server-k8s": converted_options}).strip(),
         "removed-keys": removed_keys,
-        "unrecognized-keys":  unrecognized_keys,
+        "unrecognized-keys": unrecognized_keys,
     }
-    return result

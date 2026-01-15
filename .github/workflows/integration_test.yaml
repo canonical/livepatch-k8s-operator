@@ -7,7 +7,7 @@ on:
 jobs:
   integration-test:
     name: Integration tests (MicroK8s controller)
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux, X64, xlarge, jammy]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --destructive-mode --verbosity=trace
+        run: sudo charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
@@ -50,7 +50,7 @@ jobs:
         uses: canonical/charming-actions/dump-logs@main
   integration-test-airgapped:
     name: Airgapped integration tests (LXD controller)
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux, X64, xlarge, jammy]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --destructive-mode --verbosity=trace
+        run: sudo charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main

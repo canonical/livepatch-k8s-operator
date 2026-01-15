@@ -1,0 +1,21 @@
+canonical-livepatch-server-k8s:
+  auth.sso.url: login.ubuntu.com
+  database.connection-lifetime-max: 30m
+  database.connection-pool-max: 15
+  machine-reports.database.cleanup-interval: 6h
+  machine-reports.database.cleanup-row-limit: 1000
+  machine-reports.database.retention-days: 90
+  patch-cache.cache-size: 128
+  patch-cache.cache-ttl: 1h
+  patch-cache.enabled: false
+  patch-storage.s3-secure: true
+  patch-storage.type: postgres
+  patch-sync.enabled: true
+  patch-sync.flavors: generic,lowlatency,aws
+  patch-sync.interval: 1h
+  patch-sync.send-machine-reports: false
+  patch-sync.upstream-url: https://livepatch.canonical.com
+  server.burst-limit: 500
+  server.concurrency-limit: 50
+  server.log-level: warn
+  server.url-template: template

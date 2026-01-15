@@ -64,10 +64,6 @@ CONFIG_MAP = {
     # Blocklist cache
     "blocklist_cache_refresh": "patch-blocklist.refresh-interval",
     # Machine reports
-    "event_bus_brokers": "machine-reports.event-bus.brokers",
-    "event_bus_ca_cert": "machine-reports.event-bus.ca-cert",
-    "event_bus_client_cert": "machine-reports.event-bus.client-cert",
-    "event_bus_client_key": "machine-reports.event-bus.client-key",
     "report_cleanup_interval": "machine-reports.database.cleanup-interval",
     "report_cleanup_row_limit": "machine-reports.database.cleanup-row-limit",
     "report_retention": "machine-reports.database.retention-days",

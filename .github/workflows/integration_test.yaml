@@ -11,7 +11,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+        
+      - name: Install nightly Rust for maturin/pydantic_core build
+        run: |
+          rustup toolchain install nightly
+          rustup default nightly
       # To speed up the tests, we build the charm with Charmcraft and put the
       # `.charm` file in the repository root directory. Integration tests will
       # pick up this file and avoid building it per test case.
@@ -54,7 +58,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Install nightly Rust for maturin/pydantic_core build
+        run: |
+          rustup toolchain install nightly
+          rustup default nightly
       # To speed up the tests, we build the charm with Charmcraft and put the
       # `.charm` file in the repository root directory. Integration tests will
       # pick up this file and avoid building it per test case.

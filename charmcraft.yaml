@@ -12,6 +12,13 @@ platforms:
 parts:
   charm:
     build-packages: [git, gawk]
+    charm-python-packages: [setuptools, pip]
+    charm-binary-python-packages:
+      - cosl
+      - ops
+      - ops-lib-pgsql
+      - requests
+      - responses
     override-build: |
       # 1. Install yq
       sudo snap install yq

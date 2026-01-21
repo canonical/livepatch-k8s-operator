@@ -31,7 +31,7 @@ CONFIG_MAP = {
     "sync_interval": "patch-sync.interval",
     "sync_minimum_kernel_version": "patch-sync.minimum-kernel-version",
     "sync_architectures": "patch-sync.architectures",
-    "sync_token": "patch-sync.token",
+    "sync_token": "patch-sync.token",  # nosec
     "sync_upstream": "patch-sync.upstream-url",
     "sync_send_machine_reports": "patch-sync.send-machine-reports",
     "sync_identity": None,
@@ -48,7 +48,7 @@ CONFIG_MAP = {
     "s3_bucket": "patch-storage.s3-bucket",
     "s3_endpoint": "patch-storage.s3-endpoint",
     "s3_region": "patch-storage.s3-region",
-    "s3_secret_key": "patch-storage.s3-secret-key",
+    "s3_secret_key": "patch-storage.s3-secret-key",  # nosec
     "s3_secure": "patch-storage.s3-secure",
     "swift_apikey": "patch-storage.swift-api-key",
     "swift_auth_url": "patch-storage.swift-auth-url",
@@ -70,7 +70,7 @@ CONFIG_MAP = {
     # KPI reports
     "kpi_reports": "kpi-reports.interval",
     # Contracts
-    "contract_server_password": "contracts.password",
+    "contract_server_password": "contracts.password",  # nosec
     "contract_server_url": "contracts.url",
     "contract_server_user": "contracts.user",
     # Profiler settings

@@ -175,7 +175,7 @@ class TestCharm(unittest.TestCase):
 
         self.start_container()
 
-        self._assert_environment_contains({"LP_PATCH_SYNC_TOKEN": "AAAABBBB"})
+        self._assert_environment_contains({"LP_PATCH_SYNC_TOKEN": "AAAABBBB"})  # nosec
 
     def test_schema_upgrade_action__success(self):
         """Test the scenario where `schema-upgrade` action finishes successfully."""
@@ -900,7 +900,7 @@ settings:
                 "postgres-new",
                 {
                     "username": "some-username",
-                    "password": "some-password",
+                    "password": "some-password",  # nosec
                     "endpoints": "some.database.host,some.other.database.host",
                 },
             )
@@ -921,7 +921,7 @@ settings:
             "postgres-new",
             {
                 "username": "some-username",
-                "password": "some-password",
+                "password": "some-password",  # nosec
                 "endpoints": "some.database.host,some.other.database.host",
             },
         )
@@ -953,7 +953,7 @@ settings:
             "postgres-new",
             {
                 "username": "some-username",
-                "password": "some-password",
+                "password": "some-password",  # nosec
                 "endpoints": "some.database.host,some.other.database.host",
             },
         )
@@ -975,7 +975,7 @@ settings:
             "postgres-new",
             {
                 "username": "",
-                "password": "",
+                "password": "",  # nosec
                 "endpoints": "some.database.host,some.other.database.host",
             },
         )
@@ -1031,7 +1031,7 @@ settings:
             "postgres-new",
             {
                 "username": "username",
-                "password": "password",
+                "password": "password",  # nosec
                 "endpoints": "host",
             },
         )
@@ -1130,7 +1130,7 @@ settings:
         self._assert_environment_contains(
             {
                 "LP_PATCH_SYNC_ENABLED": True,
-                "LP_PATCH_SYNC_TOKEN": "AAAABBBB",
+                "LP_PATCH_SYNC_TOKEN": "AAAABBBB",  # nosec
                 "LP_CONTRACTS_ENABLED": True,
                 "LP_CONTRACTS_URL": "scheme://some.host.name:9999",
             }

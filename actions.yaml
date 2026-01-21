@@ -19,3 +19,10 @@ get-resource-token:
       type: string
       default: ""
   required: ["contract-token"]
+
+emit-updated-config:
+  description: Generate new yaml config based on old reactive charm config.
+  params:
+    config-file:
+      type: string
+  required: ["config-file"]

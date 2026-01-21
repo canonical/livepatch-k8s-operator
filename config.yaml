@@ -358,32 +358,6 @@ options:
     default: 6h
     description: Time between report cleanup runs.
     type: string
-  machine-reports.event-bus.enabled:
-    default: false
-    description: Whether or not to enable machine reports writes to kafka.
-    type: boolean
-  machine-reports.event-bus.brokers:
-    default: ""
-    description: The list of kafka brokers, comma separated to use for pushing reports.
-    type: string
-  machine-reports.event-bus.client-cert:
-    default: ""
-    description: The X509 client certificate to use for mTLS authorisation.
-    type: string
-  machine-reports.event-bus.client-key:
-    default: ""
-    description: The X509 private key associated with the client certificate to use for mTLS authorisation.
-    type: string
-  machine-reports.event-bus.ca-cert:
-    default: ""
-    description: The X509 intermediate or root certificate authority certificate to use for mTLS authorisation.
-    type: string
-  machine-reports.event-bus.kafka-version:
-    default: ""
-    description: |
-      The kafka version you wish to specifically bind to, when not provided, 
-      the kafka version is not validated.
-    type: string
 
   kpi-reports.enabled:
     default: ""

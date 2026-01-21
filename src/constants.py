@@ -10,7 +10,6 @@ LOGGER = logging.getLogger(__name__)
 WORKLOAD_CONTAINER = "livepatch"
 SCHEMA_UPGRADE_CONTAINER = "livepatch-schema-upgrade"
 
-
 class PgIsReadyStates:
     """Postgres states."""
 

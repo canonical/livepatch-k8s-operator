@@ -1,4 +1,4 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """Utils module."""
@@ -11,6 +11,7 @@ import tempfile
 import typing as t
 
 import requests
+
 
 DEFAULT_CONTRACTS_URL = "https://contracts.canonical.com"
 RESOURCE_NAME = "livepatch-onprem"

@@ -1,0 +1,310 @@
+application: canonical-livepatch-server
+application-config:
+  trust:
+    default: false
+    description: Does this application have access to trusted credentials
+    source: default
+    type: bool
+    value: false
+charm: canonical-livepatch-server
+settings:
+  auth_basic_users:
+    default: ""
+    description: Comma-separated list of <user>:<bcrypt password hash> pairs.
+    source: default
+    type: string
+    value: ""
+  auth_lp_teams:
+    default: ""
+    description: Comma-separated list of launchpad teams allowed admin access. This
+      is used with SSO authentication.
+    source: default
+    type: string
+    value: ""
+  auth_sso_location:
+    default: login.ubuntu.com
+    description: Location of the sso service.
+    source: default
+    type: string
+    value: login.ubuntu.com
+  auth_sso_public_key:
+    default: ""
+    description: Public key of the sso service.
+    source: default
+    type: string
+    value: ""
+  burst_limit:
+    default: 500
+    description: Maximum number of concurrently incoming requests. The amount of request
+      |concurrency_limit - burst_limit| will be queued.
+    source: default
+    type: int
+    value: 500
+  concurrency_limit:
+    default: 50
+    description: Maximum number of API requests being served concurrently.
+    source: default
+    type: int
+    value: 50
+  dbconn_max:
+    default: 15
+    description: Maximum number of database connections in the pool. Should be adjusted
+      according to the postgres config and the number of units running.
+    source: default
+    type: int
+    value: 15
+  dbconn_max_lifetime:
+    default: 30m
+    description: Maximum lifetime of a database connection.
+    source: default
+    type: string
+    value: 30m
+  filestore_path:
+    default: /livepatch/
+    description: If using the file-backed storage instead of object storage, set this
+      to the patch storage folder.
+    source: default
+    type: string
+    value: /livepatch/
+  http_proxy:
+    default: ""
+    description: HTTP proxy that livepatch server should use.
+    source: default
+    type: string
+    value: ""
+  https_proxy:
+    default: ""
+    description: HTTPS proxy that livepatch server should use.
+    source: default
+    type: string
+    value: ""
+  log_level:
+    default: warn
+    description: Logging level. Accepts 'debug', 'info', 'warn', 'error'.
+    source: default
+    type: string
+    value: warn
+  nagios_context:
+    default: juju
+    description: |
+      Used by the nrpe subordinate charms.
+      A string that will be prepended to instance name to set the host name
+      in nagios. So for instance the hostname would be something like:
+          juju-myservice-0
+      If you're running multiple environments with the same services in them
+      this allows you to differentiate between them.
+    source: default
+    type: string
+    value: juju
+  nagios_servicegroups:
+    default: ""
+    description: |
+      A comma-separated list of nagios servicegroups.
+      If left empty, the nagios_context will be used as the servicegroup
+    source: default
+    type: string
+    value: ""
+  no_proxy:
+    default: ""
+    description: Comma-separated list of domain names not to be proxied.
+    source: default
+    type: string
+    value: ""
+  patch_cache_on:
+    default: false
+    description: Is the patch cache enabled?
+    source: default
+    type: boolean
+    value: false
+  patch_cache_size:
+    default: 128
+    description: Size of patch lookup cache.
+    source: default
+    type: int
+    value: 128
+  patch_cache_ttl:
+    default: 1h
+    description: Lifetime of cached patch lookup results.
+    source: default
+    type: string
+    value: 1h
+  patch_sync_enabled:
+    default: true
+    description: Determines if this instance of Livepatch Server should sync patches
+      from another instance.
+    source: default
+    type: boolean
+    value: true
+  patchstore:
+    default: file
+    description: 'Type of patchstore. Supported values: file, swift, s3 and postgres.'
+    source: user
+    type: string
+    value: postgres
+  port:
+    default: 80
+    description: TCP port the livepatch server will be listening on.
+    source: user
+    type: int
+    value: 90
+  psql_dbname:
+    default: livepatch
+    description: Name of the postgresql database to connect to. Should be set to the
+      name of the database used by the existing livepatch server.
+    source: default
+    type: string
+    value: livepatch
+  psql_roles:
+    default: ""
+    description: Comma separated list of roles to be granted to the db user. Use this
+      to gain access to the existing livepatch db.
+    source: default
+    type: string
+    value: ""
+  report_cleanup_interval:
+    default: 6h
+    description: |
+      Time between report cleanup runs.
+    source: default
+    type: string
+    value: 6h
+  report_cleanup_row_limit:
+    default: 1000
+    description: |
+      Maximum number of rows to remove with a single report cleanup row.
+    source: default
+    type: int
+    value: 1000
+  report_retention:
+    default: 90
+    description: |
+      Number of days to retain machine reports for.
+    source: default
+    type: int
+    value: 90
+  s3_access_key_id:
+    default: ""
+    description: Access key id for s3-like patch storage provider.
+    source: default
+    type: string
+    value: ""
+  s3_bucket:
+    default: ""
+    description: Bucket name for s3-like patch storage provider.
+    source: default
+    type: string
+    value: ""
+  s3_endpoint:
+    default: ""
+    description: Endpoint URL for s3-like patch storage provider.
+    source: default
+    type: string
+    value: ""
+  s3_region:
+    default: ""
+    description: Region name for s3-like patch storage provider.
+    source: default
+    type: string
+    value: ""
+  s3_secret_key:
+    default: ""
+    description: Secret key for s3-like patch storage provider.
+    source: default
+    type: string
+    value: ""
+  s3_secure:
+    default: true
+    description: Should TLS be used for s3-like patch storage provider.
+    source: default
+    type: boolean
+    value: true
+  swift_apikey:
+    default: ""
+    description: Swift apikey.
+    source: default
+    type: string
+    value: ""
+  swift_auth_url:
+    default: ""
+    description: Swift auth URL (i.e. keystone, normally ends in /v2.0 ).
+    source: default
+    type: string
+    value: ""
+  swift_container_name:
+    default: ""
+    description: Name of the container in Swift that contains livepatch files.
+    source: default
+    type: string
+    value: ""
+  swift_domain_name:
+    default: ""
+    description: Swift domain name.
+    source: default
+    type: string
+    value: ""
+  swift_region_name:
+    default: ""
+    description: Swift region name.
+    source: default
+    type: string
+    value: ""
+  swift_tenant_name:
+    default: ""
+    description: Swift tenant.
+    source: default
+    type: string
+    value: ""
+  swift_username:
+    default: ""
+    description: Swift username.
+    source: default
+    type: string
+    value: ""
+  sync_architectures:
+    default: ""
+    description: Comma-separated list of architectures to download patches for. When
+      no value is present, all are synced.
+    source: default
+    type: string
+    value: ""
+  sync_flavors:
+    default: generic,lowlatency,aws
+    description: Comma-separated list of kernel flavors to download patches for.
+    source: default
+    type: string
+    value: generic,lowlatency,aws
+  sync_interval:
+    default: 1h
+    description: Period between automatic patch snapshot downloads.
+    source: default
+    type: string
+    value: 1h
+  sync_minimum_kernel_version:
+    default: ""
+    description: A minimum kernel version of format "0.0.0" denoting the lowest  kernel
+      version to download patches for. When no value is present, all are synced. For
+      example, "5.4.0" will sync "5.4.0" and up.
+    source: default
+    type: string
+    value: ""
+  sync_send_machine_reports:
+    default: false
+    description: Enable sending reports from local machines during patch synchronization.
+    source: default
+    type: boolean
+    value: false
+  sync_upstream:
+    default: https://livepatch.canonical.com
+    description: Livepatch server to download patch snapshots from.
+    source: default
+    type: string
+    value: https://livepatch.canonical.com
+  url_template:
+    default: ""
+    description: |
+      Template string to use when making URLs for giving back to the client.
+      e.g. https://livepatch-hosting.com/v1/patches/{filename}
+      This will need to be configured once the url or ip address of the service is known.
+    source: user
+    type: string
+    value: template

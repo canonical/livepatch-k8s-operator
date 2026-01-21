@@ -18,7 +18,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --destructive-mode --verbosity=trace
+        run: sudo charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
@@ -61,7 +61,7 @@ jobs:
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
       - name: Build charm
-        run: charmcraft pack --destructive-mode --verbosity=trace
+        run: sudo charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main

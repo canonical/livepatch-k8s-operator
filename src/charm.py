@@ -9,6 +9,7 @@ import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
+import yaml
 
 import pgsql
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
@@ -23,6 +24,7 @@ from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, Relati
 
 import utils
 from constants import LOGGER, SCHEMA_UPGRADE_CONTAINER, WORKLOAD_CONTAINER
+from legacy_constants import map_old_config_to_new_config
 from state import State
 
 SERVER_PORT = 8080
@@ -71,6 +73,7 @@ class LivepatchCharm(CharmBase):
 
         self.framework.observe(self.on.get_resource_token_action, self.get_resource_token_action)
 
+        self.framework.observe(self.on.emit_updated_config_action, self.emit_updated_config_action)
         # Legacy database support
         self.legacy_db = pgsql.PostgreSQLClient(self, DATABASE_RELATION_LEGACY)
         self.framework.observe(
@@ -766,6 +769,24 @@ class LivepatchCharm(CharmBase):
         self._update_workload_container_config(None)
 
         event.set_results({"result": "resource token set"})
+
+    def emit_updated_config_action(self, event: ActionEvent):
+        """Convert a legacy reactive charm config to the current ops charm config."""
+        config_content = event.params["config-file"]
+        try:
+            config_yaml = yaml.safe_load(config_content)
+            if not (isinstance(config_yaml, dict) and config_yaml.keys()):
+                event.fail(f"invalid config file format. Got content {config_content}")
+                return
+        except yaml.YAMLError as e:
+            event.fail(f"Failed to parse YAML: {e}")
+            return
+        try:
+            result = map_old_config_to_new_config(config_yaml)
+        except ValueError as e:
+            event.fail(f"Failed to map old config to new config: {e}")
+            return
+        event.set_results({"result": result})
 
     def set_status_and_log(self, msg, status) -> None:
         """Log and set unit status."""

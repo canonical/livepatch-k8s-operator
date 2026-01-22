@@ -12,15 +12,18 @@ platforms:
 parts:
   charm:
     build-packages: [git, gawk]
-    charm-python-packages: [setuptools, pip]
+    charm-python-packages: 
+    - setuptools==78.1.1
+    - pip==23.2.1
     charm-binary-python-packages:
-      - cosl
-      - ops
-      - ops-lib-pgsql
-      - requests
-      - responses
+    - cosl==1.4.0
+    - ops==3.5.0
+    - ops-lib-pgsql==1.4
+    - requests==2.32.5
+    - responses==0.25.8
+    - urllib3==2.6.3
     override-build: |
-      # 1. Install yq and GNU awk.
+      # 1. Install yq
       sudo snap install yq
 
       # 2. Run the default charm build steps.

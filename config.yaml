@@ -387,6 +387,10 @@ options:
   influx.bucket:
     description: "Bucket to send data"
     type: string
+  influx.ping_bucket:
+    description: "Bucket to send ping data under a different retention policy"
+    type: string
+    
   influx.organization:
     description: "Organization name"
     type: string

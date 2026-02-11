@@ -192,16 +192,7 @@ class LivepatchCharm(CharmBase):
 
     def on_stop(self, _):
         """On stop hook."""
-        container = self.unit.get_container(WORKLOAD_CONTAINER)
-        if container.can_connect():
-            try:
-                service = container.get_service(LIVEPATCH_SERVICE_NAME)
-            except ModelError:
-                LOGGER.warning("service not found, nothing to stop")
-                return
-            if service.is_running():
-                container.stop(LIVEPATCH_SERVICE_NAME)
-        self.unit.status = WaitingStatus("service stopped")
+        self._stop_service()
 
     def handle_schema_upgrade(self):
         """Check if a schema upgrade is required, and perform it."""
@@ -462,11 +453,15 @@ class LivepatchCharm(CharmBase):
         if container.can_connect():
             try:
                 service = container.get_service(LIVEPATCH_SERVICE_NAME)
-                if service.is_running():
-                    LOGGER.info("Stopping livepatch service")
-                    container.stop(LIVEPATCH_SERVICE_NAME)
             except ModelError:
-                LOGGER.debug("Service not found, nothing to stop")
+                LOGGER.debug("Service not found in call to _stop_service, nothing to stop")
+                return
+            if service.is_running():
+                LOGGER.info("Stopping livepatch service")
+                container.stop(LIVEPATCH_SERVICE_NAME)
+            self.unit.status = WaitingStatus("service stopped")
+        else:
+            LOGGER.info("workload container not ready when trying to stop service")
 
     def _clear_db_connection(self) -> None:
         LOGGER.info("Clearing database connection string from state")

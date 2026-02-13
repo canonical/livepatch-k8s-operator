@@ -116,6 +116,14 @@ options:
     default: 10m
     description: The lifespan of an idle PostgreSQL connection.
     type: string
+  database.work_mem:
+    description: |
+      The PostgreSQL work_mem parameter for connections with the database.
+      The value is specified as an integer number of MegaBytes (MB), matching the
+      unit semantics of PostgreSQL's work_mem setting.
+      This option is optional: when left unset, the charm does not override
+      PostgreSQL's work_mem, and the server's own default value is used.
+    type: int
 
   patch-storage.type:
     default: filesystem

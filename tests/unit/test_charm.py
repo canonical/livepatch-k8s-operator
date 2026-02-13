@@ -1427,27 +1427,37 @@ settings:
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
 
-    def test_database_legacy_relation_broken__stops_service_and_clears_dsn(self):
-        """Test that database-legacy relation broken stops service and clears DSN without attempting restart."""
-        self.harness.set_leader(True)
-        self.harness.enable_hooks()
-
-        # Setup: Add and configure legacy database relation
+    def _add_database_legacy_relation(self, dsn_string: str = "postgresql://user:pass@host:5432/livepatch-server"):
+        """Helper method to add and configure a legacy database relation."""
         db_rel_id = self.harness.add_relation("database-legacy", "postgresql")
+
         with patch("subprocess.check_call", return_value=None):
             with patch("subprocess.check_output", return_value=b""):
                 self.harness.add_relation_unit(db_rel_id, "postgresql/0")
 
         # Set DSN as if database was connected
-        self.harness.charm._state.dsn = "postgresql://user:pass@host:5432/livepatch-server"
+        self.harness.charm._state.dsn = dsn_string
 
-        # Start the service
-        container = self.harness.model.unit.get_container("livepatch")
+        return db_rel_id
+
+    def _start_service(self, container):
+        """Start the service"""
         self.harness.charm._state.resource_token = TEST_TOKEN
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
             migration.return_value = False
             self.harness.update_config({"server.url-template": "http://localhost/{filename}"})
             self.harness.charm.on.livepatch_pebble_ready.emit(container)
+
+    def test_database_legacy_relation_broken__stops_service_and_clears_dsn(self):
+        """Test that database-legacy relation broken stops service and clears DSN without attempting restart."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        db_rel_id = self._add_database_legacy_relation()
+
+        container = self.harness.model.unit.get_container("livepatch")
+
+        self._start_service(container)
 
         # Verify service is running
         service = container.get_service(LIVEPATCH_SERVICE_NAME)
@@ -1469,13 +1479,11 @@ settings:
         self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
         self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
 
-    def test_database_relation_broken__stops_service_and_clears_dsn(self):
-        """Test that database relation broken stops service and clears DSN without attempting restart."""
-        self.harness.set_leader(True)
-        self.harness.enable_hooks()
 
-        # Setup: Add and configure database relation
+    def _add_database_relation(self):
+        """Helper method to add and configure a database relation."""
         db_rel_id = self.harness.add_relation("database", "postgresql-k8s")
+
         self.harness.add_relation_unit(db_rel_id, "postgresql-k8s/0")
         self.harness.update_relation_data(
             db_rel_id,
@@ -1487,13 +1495,18 @@ settings:
             },
         )
 
+        return db_rel_id
+
+    def test_database_relation_broken__stops_service_and_clears_dsn(self):
+        """Test that database relation broken stops service and clears DSN without attempting restart."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        db_rel_id = self._add_database_relation()
+
         # Start the service
         container = self.harness.model.unit.get_container("livepatch")
-        self.harness.charm._state.resource_token = TEST_TOKEN
-        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
-            migration.return_value = False
-            self.harness.update_config({"server.url-template": "http://localhost/{filename}"})
-            self.harness.charm.on.livepatch_pebble_ready.emit(container)
+        self._start_service(container)
 
         # Verify service is running and DSN is set
         service = container.get_service(LIVEPATCH_SERVICE_NAME)
@@ -1520,21 +1533,14 @@ settings:
         self.harness.enable_hooks()
 
         # Setup: Add database relation
-        db_rel_id = self.harness.add_relation("database-legacy", "postgresql")
-        with patch("subprocess.check_call", return_value=None):
-            with patch("subprocess.check_output", return_value=b""):
-                self.harness.add_relation_unit(db_rel_id, "postgresql/0")
+        db_rel_id = self._add_database_legacy_relation()
 
         # Set DSN as if database was connected (even though non-leader shouldn't set it)
         self.harness.charm._state.dsn = "postgresql://user:pass@host:5432/livepatch-server"
 
         # Start the service
         container = self.harness.model.unit.get_container("livepatch")
-        self.harness.charm._state.resource_token = TEST_TOKEN
-        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
-            migration.return_value = False
-            self.harness.update_config({"server.url-template": "http://localhost/{filename}"})
-            self.harness.charm.on.livepatch_pebble_ready.emit(container)
+        self._start_service(container)
 
         # Act: Remove the database relation
         with patch("subprocess.check_call", return_value=None):
@@ -1555,17 +1561,7 @@ settings:
         self.harness.enable_hooks()
 
         # Setup: Add database relation but don't start service
-        db_rel_id = self.harness.add_relation("database", "postgresql-k8s")
-        self.harness.add_relation_unit(db_rel_id, "postgresql-k8s/0")
-        self.harness.update_relation_data(
-            db_rel_id,
-            "postgresql-k8s",
-            {
-                "username": "testuser",
-                "password": "testpass",  # nosec
-                "endpoints": "10.0.0.1:5432",
-            },
-        )
+        db_rel_id = self._add_database_relation()
 
         # Act: Remove the database relation without starting service
         self.harness.remove_relation(db_rel_id)
@@ -1601,32 +1597,17 @@ settings:
         check_output_mock = Mock(side_effect=get_database_name_using_juju_leader_get)
 
         # Setup: Add and configure legacy database relation
-        with patch("subprocess.check_call", check_call_mock):
-            with patch("subprocess.check_output", check_output_mock):
-                legacy_db_rel_id = self.harness.add_relation("database-legacy", "postgres")
-                self.harness.add_relation_unit(legacy_db_rel_id, "postgres/0")
-                self.harness.update_relation_data(
-                    legacy_db_rel_id,
-                    "postgres/0",
-                    {
-                        "database": "livepatch-server",
-                        # wokeignore:rule=master
-                        "master": "host=host port=5432 dbname=livepatch-server user=username password=password",
-                    },
-                )
+        dsn_string = "postgresql://username:password@host:5432/livepatch-server"
+        legacy_db_rel_id = self._add_database_legacy_relation(dsn_string)
 
         # Verify DSN is set
         self.assertEqual(
-            self.harness.charm._state.dsn, "postgresql://username:password@host:5432/livepatch-server"
+            self.harness.charm._state.dsn, dsn_string
         )
 
         # Start the service
         container = self.harness.model.unit.get_container("livepatch")
-        self.harness.charm._state.resource_token = TEST_TOKEN
-        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
-            migration.return_value = False
-            self.harness.update_config({"server.url-template": "http://localhost/{filename}"})
-            self.harness.charm.on.livepatch_pebble_ready.emit(container)
+        self._start_service(container)
 
         # Verify service is running
         service = container.get_service(LIVEPATCH_SERVICE_NAME)
@@ -1645,23 +1626,12 @@ settings:
         self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
 
         # Act 2: Re-establish the legacy database relation (fixing the broken relation)
-        with patch("subprocess.check_call", check_call_mock):
-            with patch("subprocess.check_output", check_output_mock):
-                new_legacy_db_rel_id = self.harness.add_relation("database-legacy", "postgres")
-                self.harness.add_relation_unit(new_legacy_db_rel_id, "postgres/0")
-                self.harness.update_relation_data(
-                    new_legacy_db_rel_id,
-                    "postgres/0",
-                    {
-                        "database": "livepatch-server",
-                        # wokeignore:rule=master
-                        "master": "host=newhost port=5432 dbname=livepatch-server user=newuser password=newpass",
-                    },
-                )
+        new_dsn_string = "postgresql://newuser:newpass@newhost:5432/livepatch-server"
+        self._add_database_legacy_relation(dsn_string=new_dsn_string)
 
         # Verify DSN is updated with new connection details
         self.assertEqual(
-            self.harness.charm._state.dsn, "postgresql://newuser:newpass@newhost:5432/livepatch-server"
+            self.harness.charm._state.dsn, new_dsn_string
         )
 
         # Trigger pebble ready again to start the service with new relation
@@ -1673,6 +1643,6 @@ settings:
         service = container.get_service(LIVEPATCH_SERVICE_NAME)
         self.assertTrue(service.is_running())
         self.assertEqual(
-            self.harness.charm._state.dsn, "postgresql://newuser:newpass@newhost:5432/livepatch-server"
+            self.harness.charm._state.dsn, new_dsn_string
         )
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)

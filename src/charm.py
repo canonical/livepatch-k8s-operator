@@ -454,7 +454,7 @@ class LivepatchCharm(CharmBase):
             try:
                 service = container.get_service(LIVEPATCH_SERVICE_NAME)
             except ModelError:
-                LOGGER.debug("Service not found in call to _stop_service, nothing to stop")
+                LOGGER.debug("Attempted to stop service but it was not found in the container")
                 return
             if service.is_running():
                 LOGGER.info("Stopping livepatch service")

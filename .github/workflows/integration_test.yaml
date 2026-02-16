@@ -71,7 +71,8 @@ jobs:
           juju-channel: 2.9/stable
           provider: microk8s
           microk8s-group: snap_microk8s
-          microk8s-addons: "ingress storage dns rbac registry"
+          microk8s-addons: "ingress storage dns rbac registry ingress metallb:192.168.0.10-192.168.0.10"
+          # metallb:192.168.0.10-192.168.0.10 is needed for traefik on microk8s.
       # Instructions from https://microk8s.io/docs/registry-private
       # and https://github.com/containerd/cri/blob/master/docs/registry.md
       # Bash explanation https://stackoverflow.com/questions/15429330/how-to-specify-a-multi-line-shell-variable#comment21828145_15429426

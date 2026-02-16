@@ -137,11 +137,10 @@ class LivepatchCharm(CharmBase):
         self._grafana_dashboards = GrafanaDashboardProvider(self, relation_name="grafana-dashboard")
 
     def _on_ingress_ready(self, event: IngressPerAppReadyEvent):
-        self.unit.status = ActiveStatus(f"I have ingress at {event.url}!")
+        LOGGER.info("Ingress is ready, received URL: %s", event.url)
 
     def _on_ingress_revoked(self, _):
-        self.unit.status = WaitingStatus("I have lost my ingress URL!")
-
+        LOGGER.warning("Ingress relation revoked")
     def on_peer_relation_changed(self, event):
         """
         On peer relation changed hook.

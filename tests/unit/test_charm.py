@@ -1469,14 +1469,3 @@ class TestIngressMethod(unittest.TestCase):
         require_nginx_route.assert_not_called()
         self.assertIsInstance(harness.charm.ingress, IngressPerAppRequirer)
 
-    def test_ingress_ready_and_revoked_update_status(self):
-        with patch("src.charm.require_nginx_route"):
-            harness = self._start_harness("traefik-route")
-
-        harness.charm._on_ingress_ready(SimpleNamespace(url="http://example.test"))
-        self.assertEqual(harness.charm.unit.status.name, ActiveStatus.name)
-        self.assertEqual(harness.charm.unit.status.message, "I have ingress at http://example.test!")
-
-        harness.charm._on_ingress_revoked(None)
-        self.assertEqual(harness.charm.unit.status.name, WaitingStatus.name)
-        self.assertEqual(harness.charm.unit.status.message, "I have lost my ingress URL!")

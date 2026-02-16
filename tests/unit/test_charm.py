@@ -5,6 +5,7 @@
 import os
 import pathlib
 import unittest
+from types import SimpleNamespace
 from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
@@ -12,8 +13,9 @@ import yaml
 from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 
-from src.charm import LivepatchCharm
+from src.charm import LivepatchCharm, SERVER_PORT
 from src.state import State
 
 APP_NAME = "canonical-livepatch-server-k8s"
@@ -1429,3 +1431,52 @@ settings:
         plan = self.harness.get_container_pebble_plan("livepatch")
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
+
+
+class TestIngressMethod(unittest.TestCase):
+    """Ingress method tests."""
+
+    def _start_harness(self, ingress_default: str):
+        config_yaml = (
+            "options:\n"
+            "  ingress-method:\n"
+            "    type: string\n"
+            f"    default: {ingress_default!r}\n"
+        )
+        harness = Harness(LivepatchCharm, config=config_yaml)
+        self.addCleanup(harness.cleanup)
+        harness.disable_hooks()
+        harness.add_oci_resource("livepatch-server-image")
+        harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
+        harness.begin()
+        return harness
+
+    def test_ingress_default_uses_nginx_route(self):
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("")
+
+        require_nginx_route.assert_called_once_with(
+            charm=harness.charm,
+            service_hostname=harness.charm.app.name,
+            service_name=harness.charm.app.name,
+            service_port=SERVER_PORT,
+        )
+
+    def test_ingress_traefik_route_uses_requirer(self):
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("traefik-route")
+
+        require_nginx_route.assert_not_called()
+        self.assertIsInstance(harness.charm.ingress, IngressPerAppRequirer)
+
+    def test_ingress_ready_and_revoked_update_status(self):
+        with patch("src.charm.require_nginx_route"):
+            harness = self._start_harness("traefik-route")
+
+        harness.charm._on_ingress_ready(SimpleNamespace(url="http://example.test"))
+        self.assertEqual(harness.charm.unit.status.name, ActiveStatus.name)
+        self.assertEqual(harness.charm.unit.status.message, "I have ingress at http://example.test!")
+
+        harness.charm._on_ingress_revoked(None)
+        self.assertEqual(harness.charm.unit.status.name, WaitingStatus.name)
+        self.assertEqual(harness.charm.unit.status.message, "I have lost my ingress URL!")

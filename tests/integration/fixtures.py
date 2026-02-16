@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+from typing import Optional
 
 import pytest
 from charm_utils import fetch_charm
@@ -14,6 +15,8 @@ from helpers import (
     NGINX_INGRESS_CHARM_NAME,
     POSTGRESQL_CHANNEL,
     POSTGRESQL_NAME,
+    TRAEFIK_CHANNEL,
+    TRAEFIK_K8S_NAME,
     WAITING_STATUS,
     get_unit_url,
     oci_image,
@@ -24,7 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.asyncio
-async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
+async def deploy_package(
+    ops_test: OpsTest,
+    use_current_stable: bool = False,
+    ingress_method: Optional[str] = None,
+):
     """
     Deploy the application and its dependencies.
 
@@ -48,6 +55,9 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
         "server.log-level": "info",
     }
 
+    if ingress_method:
+        config["ingress-method"] = ingress_method
+
     if use_current_stable:
         logger.info("Deploying current stable release")
         deployed_application = ops_test.model.deploy(
@@ -69,6 +79,12 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
             base=jammy,
         )
 
+    ingress_name = NGINX_INGRESS_CHARM_NAME
+    ingress_channel = None
+    if ingress_method == "traefik-route":
+        ingress_name = TRAEFIK_K8S_NAME
+        ingress_channel = TRAEFIK_CHANNEL
+
     asyncio.gather(
         deployed_application,
         ops_test.model.deploy(
@@ -78,7 +94,13 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
             trust=True,
             application_name=POSTGRESQL_NAME,
         ),
-        ops_test.model.deploy(NGINX_INGRESS_CHARM_NAME, trust=True, application_name=NGINX_INGRESS_CHARM_NAME),
+        ops_test.model.deploy(
+            ingress_name,
+            base=jammy,
+            channel=ingress_channel,
+            trust=True,
+            application_name=ingress_name,
+        ),
     )
 
     async with ops_test.fast_forward():
@@ -89,17 +111,17 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
         logger.info(f"Waiting for {APP_NAME}")
         await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
-        logger.info(f"Waiting for {NGINX_INGRESS_CHARM_NAME}")
+        logger.info(f"Waiting for {ingress_name}")
         await ops_test.model.wait_for_idle(
-            apps=[NGINX_INGRESS_CHARM_NAME], status=WAITING_STATUS, raise_on_blocked=False, timeout=600
+            apps=[ingress_name], status=WAITING_STATUS, raise_on_blocked=False, timeout=600
         )
 
         logger.info("Making relations")
-        await perform_livepatch_integrations(ops_test)
+        await perform_livepatch_integrations(ops_test, ingress_method=ingress_method)
         await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
         logger.info("Setting server.url-template")
-        url = await get_unit_url(ops_test, application=NGINX_INGRESS_CHARM_NAME, unit=0, port=80)
+        url = await get_unit_url(ops_test, application=ingress_name, unit=0, port=80)
         url_template = url + "/v1/patches/{filename}"
         logger.info(f"Set server.url-template to {url_template}")
         await ops_test.model.applications[APP_NAME].set_config({"server.url-template": url_template})
@@ -111,7 +133,7 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
         assert ops_test.model.applications[APP_NAME].units[0].workload_status == ACTIVE_STATUS
 
 
-async def perform_livepatch_integrations(ops_test: OpsTest):
+async def perform_livepatch_integrations(ops_test: OpsTest, ingress_method: Optional[str] = None):
     """Add relations between Livepatch charm, postgresql-k8s, and nginx-ingress-integrator.
 
     Args:
@@ -119,6 +141,9 @@ async def perform_livepatch_integrations(ops_test: OpsTest):
     """
     logger.info("Integrating Livepatch and Postgresql")
     await ops_test.model.relate(f"{APP_NAME}:database", f"{POSTGRESQL_NAME}:database")
+    if ingress_method == "traefik-route":
+        await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:traefik-route")
+        return
     await ops_test.model.relate(f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
 
 

@@ -1451,6 +1451,7 @@ class TestIngressMethod(unittest.TestCase):
         return harness
 
     def test_ingress_default_uses_nginx_route(self):
+        """assert that nginx route is used when ingress method is not set or set to 'nginx-route'."""
         with patch("src.charm.require_nginx_route") as require_nginx_route:
             harness = self._start_harness("")
 
@@ -1462,6 +1463,7 @@ class TestIngressMethod(unittest.TestCase):
         )
 
     def test_ingress_traefik_route_uses_requirer(self):
+        """assert that the charm uses IngressPerAppRequirer if ingress method is set to 'traefik-route'."""
         with patch("src.charm.require_nginx_route") as require_nginx_route:
             harness = self._start_harness("traefik-route")
 

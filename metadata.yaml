@@ -58,7 +58,11 @@ requires:
     optional: true
   nginx-route:
     # This interface has replaced the old/deprecated `ingress` interface.
+    # This is a legacy interface, new deployments should use traefik-route instead. Integration with both of these interfaces at the same time will result in an error.
     interface: nginx-route
+    optional: true
+  traefik-route:
+    interface: ingress
     optional: true
   log-proxy:
     interface: loki_push_api

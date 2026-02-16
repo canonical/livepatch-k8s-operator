@@ -9,6 +9,7 @@ import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
+import ops
 import yaml
 
 import pgsql
@@ -16,6 +17,8 @@ from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
+from charms.traefik_k8s.v2.ingress import IngressPerAppReadyEvent, IngressPerAppRequirer
+
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
@@ -111,13 +114,7 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.on.cve_catalog_relation_changed, self._on_cve_catalog_relation_changed)
         self.framework.observe(self.on.cve_catalog_relation_broken, self._on_cve_catalog_relation_broken)
 
-        # Ingress (nginx-routes interface)
-        require_nginx_route(
-            charm=self,
-            service_hostname=self.app.name,
-            service_name=self.app.name,
-            service_port=8080,
-        )
+        self._update_ingress_method()
 
         # Loki log-proxy relation
         self.log_proxy = LogProxyConsumer(
@@ -138,6 +135,12 @@ class LivepatchCharm(CharmBase):
 
         # Grafana dashboard relation
         self._grafana_dashboards = GrafanaDashboardProvider(self, relation_name="grafana-dashboard")
+
+    def _on_ingress_ready(self, event: IngressPerAppReadyEvent):
+        self.unit.status = ActiveStatus(f"I have ingress at {event.url}!")
+
+    def _on_ingress_revoked(self, _):
+        self.unit.status = WaitingStatus("I have lost my ingress URL!")
 
     def on_peer_relation_changed(self, event):
         """
@@ -267,6 +270,42 @@ class LivepatchCharm(CharmBase):
         raw_version = charm_file.read_text(encoding="utf-8")
         version = raw_version.strip()
         self.unit.set_workload_version(version)
+
+    def _update_ingress_method(self):
+        """Update the ingress method based on the config."""
+        ingress_method = self.config.get("ingress-method")
+
+        # Keep backwards compatibility: default to nginx-route when not configured.
+        # nginx-route is legacy; traefik-route is preferred for new deployments.
+        if not ingress_method:
+            LOGGER.warning("No ingress method specified, defaulting to nginx-route")
+            require_nginx_route(
+                charm=self,
+                service_hostname=self.app.name,
+                service_name=self.app.name,
+                service_port=SERVER_PORT,
+            )
+        elif ingress_method == "nginx-route":
+            LOGGER.info("Ingress method specified as nginx-route")
+            require_nginx_route(
+                charm=self,
+                service_hostname=self.app.name,
+                service_name=self.app.name,
+                service_port=SERVER_PORT,
+            )
+        elif ingress_method == "traefik-route":
+            LOGGER.info("Ingress method specified as traefik-route")
+            self.ingress = IngressPerAppRequirer(
+                charm=self,
+                relation_name="traefik-route",
+                port=SERVER_PORT,
+            )
+            self.framework.observe(self.ingress.on.ready, self._on_ingress_ready)
+            self.framework.observe(self.ingress.on.revoked, self._on_ingress_revoked)
+        else:
+            error_msg = f"Invalid ingress method specified: {ingress_method}"
+            LOGGER.error(error_msg)
+            self.unit.status = BlockedStatus(error_msg)
 
     def _update_workload_container_config(self, event: Optional[HookEvent]):
         """

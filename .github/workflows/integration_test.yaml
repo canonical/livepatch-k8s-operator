@@ -108,6 +108,8 @@ jobs:
       - name: Run integration tests (airgapped)
         # set a predictable model name so it can be consumed by charm-logdump-action
         run: tox -e integration-airgapped
+      - name: Run integration tests for ingress
+        run: tox -e integration-ingress
       - name: Dump logs
         if: failure()
         uses: canonical/charming-actions/dump-logs@main

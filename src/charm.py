@@ -9,7 +9,6 @@ import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
-import ops
 import yaml
 
 import pgsql

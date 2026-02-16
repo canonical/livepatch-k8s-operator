@@ -5,7 +5,6 @@
 import os
 import pathlib
 import unittest
-from types import SimpleNamespace
 from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 

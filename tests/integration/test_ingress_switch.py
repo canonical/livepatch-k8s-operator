@@ -7,7 +7,7 @@ import logging
 import pytest
 import requests
 from fixtures import deploy_package, switch_ingress_from_nginx_to_traefik
-from helpers import ACTIVE_STATUS, APP_NAME, NGINX_INGRESS_CHARM_NAME, TRAEFIK_CHANNEL, TRAEFIK_K8S_NAME
+from helpers import ACTIVE_STATUS, APP_NAME, NGINX_INGRESS_CHARM_NAME
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ async def test_nginx_ingress_switch(ops_test: OpsTest):
     assert response.status_code == 200
    
     await switch_ingress_from_nginx_to_traefik(ops_test)
-    
+
     app_address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
     url = f"http://{app_address}:8080/debug/status"
     logger.info("Querying app address: %s", url)

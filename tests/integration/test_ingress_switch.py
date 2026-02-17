@@ -33,7 +33,7 @@ async def test_nginx_ingress_switch(ops_test: OpsTest):
     await ops_test.juju("remove-relation", f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
     await ops_test.model.applications[APP_NAME].set_config({"ingress-method": "traefik-route"})
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
-    await ops_test.model.relate(f"{APP_NAME}:ingress", f"{TRAEFIK_K8S_NAME}:ingress")
+    await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:ingress")
 
     status = await ops_test.model.get_status()  # noqa: F821
     assert TRAEFIK_K8S_NAME in status["applications"]

@@ -1,4 +1,4 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 
@@ -155,3 +155,23 @@ def get_charm_resources():
         "livepatch-server-image": oci_image("./metadata.yaml", "livepatch-server-image"),
         "livepatch-schema-upgrade-tool-image": oci_image("./metadata.yaml", "livepatch-schema-upgrade-tool-image"),
     }
+
+
+async def switch_ingress_from_nginx_to_traefik(ops_test: OpsTest):
+    """Switch the charms ingress from Nginx Ingress to Traefik."""
+    await ops_test.model.deploy(
+            TRAEFIK_K8S_NAME,
+            base="ubuntu@22.04",
+            channel=TRAEFIK_CHANNEL,
+            trust=True,
+            application_name=TRAEFIK_K8S_NAME,
+        ),
+    await ops_test.model.wait_for_idle(apps=[TRAEFIK_K8S_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
+    await ops_test.juju("remove-relation", f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
+    await ops_test.model.applications[APP_NAME].set_config({"ingress-method": "traefik-route"})
+    await ops_test.model.wait_for_idle(apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
+    await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:ingress")
+
+    status = await ops_test.model.get_status()  # noqa: F821
+    assert TRAEFIK_K8S_NAME in status["applications"]
+    assert ops_test.model.applications[APP_NAME].status == ACTIVE_STATUS

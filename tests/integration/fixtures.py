@@ -165,9 +165,10 @@ async def switch_ingress_from_nginx_to_traefik(ops_test: OpsTest):
             channel=TRAEFIK_CHANNEL,
             trust=True,
             application_name=TRAEFIK_K8S_NAME,
-        ),
+        )
     await ops_test.model.wait_for_idle(apps=[TRAEFIK_K8S_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
-    await ops_test.juju("remove-relation", f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
+
+    await ops_test.model.remove_relation(f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
     await ops_test.model.applications[APP_NAME].set_config({"ingress-method": "traefik-route"})
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
     await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:ingress")

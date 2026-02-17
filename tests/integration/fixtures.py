@@ -113,7 +113,7 @@ async def deploy_package(
 
         logger.info(f"Waiting for {ingress_name}")
         await ops_test.model.wait_for_idle(
-            apps=[ingress_name], status=WAITING_STATUS, raise_on_blocked=False, timeout=600
+            apps=[ingress_name], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600
         )
 
         logger.info("Making relations")

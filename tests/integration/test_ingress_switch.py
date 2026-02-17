@@ -7,7 +7,7 @@ import logging
 import pytest
 import requests
 from fixtures import deploy_package
-from helpers import ACTIVE_STATUS, APP_NAME, NGINX_INGRESS_CHARM_NAME, TRAEFIK_K8S_NAME
+from helpers import ACTIVE_STATUS, APP_NAME, NGINX_INGRESS_CHARM_NAME, TRAEFIK_CHANNEL, TRAEFIK_K8S_NAME
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,16 @@ async def test_nginx_ingress_switch(ops_test: OpsTest):
     assert response.status_code == 200
 
     # Switch to traefik-route 
+    await ops_test.model.deploy(
+            TRAEFIK_K8S_NAME,
+            base="ubuntu@22.04",
+            channel=TRAEFIK_CHANNEL,
+            trust=True,
+            application_name=TRAEFIK_K8S_NAME,
+        ),
+    await ops_test.model.wait_for_idle(apps=[TRAEFIK_K8S_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
+
+    
     await ops_test.juju("remove-relation", f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
     await ops_test.model.applications[APP_NAME].set_config({"ingress-method": "traefik-route"})
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)

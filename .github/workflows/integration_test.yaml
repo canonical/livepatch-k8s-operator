@@ -91,6 +91,8 @@ jobs:
         run: tox -e integration-ingress-traefik
       - name: Run integration tests for ingress (NGINX)
         run: tox -e integration-ingress-nginx
+      - name: Run integration tests for ingress (switch from NGINX to Traefik)
+        run: tox -e integration-ingress-switch  
       - name: Dump logs
         if: failure()
         uses: canonical/charming-actions/dump-logs@main

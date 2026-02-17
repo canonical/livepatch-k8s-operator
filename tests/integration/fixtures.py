@@ -135,7 +135,7 @@ async def deploy_package(
 
 
 async def perform_livepatch_integrations(ops_test: OpsTest, ingress_method: Optional[str] = None):
-    """Add relations between Livepatch charm, postgresql-k8s, and nginx-ingress-integrator.
+    """Add relations between Livepatch charm, postgresql-k8s, and ingress.
 
     Args:
         ops_test: PyTest object.

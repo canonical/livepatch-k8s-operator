@@ -112,8 +112,9 @@ async def deploy_package(
         await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
         logger.info(f"Waiting for {ingress_name}")
+        expected_ingress_status = ACTIVE_STATUS if ingress_method == "traefik-route" else WAITING_STATUS
         await ops_test.model.wait_for_idle(
-            apps=[ingress_name], status=WAITING_STATUS, raise_on_blocked=False, timeout=600
+            apps=[ingress_name], status=expected_ingress_status, raise_on_blocked=False, timeout=600
         )
 
         logger.info("Making relations")

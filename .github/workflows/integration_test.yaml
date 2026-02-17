@@ -87,8 +87,10 @@ jobs:
           sudo snap restart microk8s.daemon-containerd
       - name: Install tox
         run: python -m pip install tox
-      - name: Run integration tests for ingress
-        run: tox -e integration-ingress
+      - name: Run integration tests for ingress (Traefik)
+        run: tox -e integration-ingress-traefik
+      - name: Run integration tests for ingress (NGINX)
+        run: tox -e integration-ingress-nginx
       - name: Dump logs
         if: failure()
         uses: canonical/charming-actions/dump-logs@main

@@ -143,7 +143,8 @@ async def perform_livepatch_integrations(ops_test: OpsTest, ingress_method: Opti
     logger.info("Integrating Livepatch and Postgresql")
     await ops_test.model.relate(f"{APP_NAME}:database", f"{POSTGRESQL_NAME}:database")
     if ingress_method == "traefik-route":
-        await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:traefik-route")
+        # The traefik-k8s charm exposes the relation endpoint as `ingress`.
+        await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:ingress")
         return
     await ops_test.model.relate(f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
 

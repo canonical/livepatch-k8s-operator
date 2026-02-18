@@ -13,7 +13,7 @@ from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
 
-from src.charm import LivepatchCharm
+from src.charm import LIVEPATCH_SERVICE_NAME, LivepatchCharm
 from src.state import State
 
 APP_NAME = "canonical-livepatch-server-k8s"
@@ -24,6 +24,7 @@ TEST_CA_CERT_1 = "TmV3IFRlc3QgQ0EgQ2VydAo="
 
 TEST_OLD_REACTIVE_CONFIG = "./tests/unit/test-data/old_config.yaml"
 EXPECTED_OPS_CONFIG = "./tests/unit/test-data/expected_config.yaml"
+
 
 class MockOutput:
     """A wrapper class for command output and errors."""
@@ -471,10 +472,7 @@ class TestCharm(unittest.TestCase):
         with self.assertRaises(ActionFailed) as ex:
             self.harness.run_action("emit-updated-config", {"config-file": old_config})
 
-        self.assertEqual(
-            ex.exception.message,
-            "invalid config file format. Got content invalid"
-        )
+        self.assertEqual(ex.exception.message, "invalid config file format. Got content invalid")
 
     def test_emit_updated_config__failure_missing_value(self):
         """Test the scenario where `emit-updated-config` action fails."""
@@ -504,7 +502,7 @@ settings:
 
         self.assertEqual(
             ex.exception.message,
-            "Failed to map old config to new config: auth_basic_users doesn't have a set value for it"
+            "Failed to map old config to new config: auth_basic_users doesn't have a set value for it",
         )
 
     def test_emit_updated_config__success(self):
@@ -517,19 +515,18 @@ settings:
         old_config = ""
         new_config = ""
 
-        with open(TEST_OLD_REACTIVE_CONFIG, 'r') as f:
+        with open(TEST_OLD_REACTIVE_CONFIG, "r") as f:
             old_config = f.read().strip()
 
-        with open(EXPECTED_OPS_CONFIG, 'r') as f:
+        with open(EXPECTED_OPS_CONFIG, "r") as f:
             new_config = f.read().strip()
-
 
         output = self.harness.run_action("emit-updated-config", {"config-file": old_config})
 
         expected_dict = {
             "new-config": new_config,
             "removed-keys": ["psql_dbname", "psql_roles"],
-            "unrecognized-keys": ["filestore_path","nagios_context","nagios_servicegroups", "port"],
+            "unrecognized-keys": ["filestore_path", "nagios_context", "nagios_servicegroups", "port"],
         }
 
         self.assertEqual(output.results, {"result": expected_dict})
@@ -1373,7 +1370,7 @@ settings:
                 "LP_CVE_SYNC_ENABLED": True,
                 "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                 "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
-                "LP_CVE_SYNC_TIMEOUT": "5m", # Default config value.
+                "LP_CVE_SYNC_TIMEOUT": "5m",  # Default config value.
             }
         )
 
@@ -1410,7 +1407,7 @@ settings:
                     "LP_CVE_SYNC_ENABLED": True,
                     "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                     "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
-                    "LP_CVE_SYNC_TIMEOUT": "5m", # Default config value.
+                    "LP_CVE_SYNC_TIMEOUT": "5m",  # Default config value.
                 }
             )
 
@@ -1429,3 +1426,223 @@ settings:
         plan = self.harness.get_container_pebble_plan("livepatch")
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
+
+    def _add_database_legacy_relation(self, dsn_string: str = "postgresql://user:pass@host:5432/livepatch-server"):
+        """Helper method to add and configure a legacy database relation."""
+        db_rel_id = self.harness.add_relation("database-legacy", "postgresql")
+
+        with patch("subprocess.check_call", return_value=None):
+            with patch("subprocess.check_output", return_value=b""):
+                self.harness.add_relation_unit(db_rel_id, "postgresql/0")
+
+        # Set DSN as if database was connected
+        self.harness.charm._state.dsn = dsn_string
+
+        return db_rel_id
+
+    def _start_service(self, container):
+        """Start the service"""
+        self.harness.charm._state.resource_token = TEST_TOKEN
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.update_config({"server.url-template": "http://localhost/{filename}"})
+            self.harness.charm.on.livepatch_pebble_ready.emit(container)
+
+    def test_database_legacy_relation_broken__stops_service_and_clears_dsn(self):
+        """Test that database-legacy relation broken stops service and clears DSN without attempting restart."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        db_rel_id = self._add_database_legacy_relation()
+
+        container = self.harness.model.unit.get_container("livepatch")
+
+        self._start_service(container)
+
+        # Verify service is running
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertTrue(service.is_running())
+
+        # Act: Remove the database relation (triggers relation-broken)
+        with patch("subprocess.check_call", return_value=None):
+            with patch("subprocess.check_output", return_value=b""):
+                self.harness.remove_relation(db_rel_id)
+
+        # Assert: Service should be stopped
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertFalse(service.is_running())
+
+        # Assert: DSN should be cleared
+        self.assertIsNone(self.harness.charm._state.dsn)
+
+        # Assert: Status should be BlockedStatus
+        self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
+        self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
+
+
+    def _add_database_relation(self):
+        """Helper method to add and configure a database relation."""
+        db_rel_id = self.harness.add_relation("database", "postgresql-k8s")
+
+        self.harness.add_relation_unit(db_rel_id, "postgresql-k8s/0")
+        self.harness.update_relation_data(
+            db_rel_id,
+            "postgresql-k8s",
+            {
+                "username": "testuser",
+                "password": "testpass",  # nosec
+                "endpoints": "10.0.0.1:5432",
+            },
+        )
+
+        return db_rel_id
+
+    def test_database_relation_broken__stops_service_and_clears_dsn(self):
+        """Test that database relation broken stops service and clears DSN without attempting restart."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        db_rel_id = self._add_database_relation()
+
+        # Start the service
+        container = self.harness.model.unit.get_container("livepatch")
+        self._start_service(container)
+
+        # Verify service is running and DSN is set
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertTrue(service.is_running())
+        self.assertEqual(self.harness.charm._state.dsn, "postgresql://testuser:testpass@10.0.0.1:5432/livepatch-server")
+
+        # Act: Remove the database relation (triggers relation-broken)
+        self.harness.remove_relation(db_rel_id)
+
+        # Assert: Service should be stopped
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertFalse(service.is_running())
+
+        # Assert: DSN should be cleared
+        self.assertIsNone(self.harness.charm._state.dsn)
+
+        # Assert: Status should be BlockedStatus
+        self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
+        self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
+
+    def test_database_legacy_relation_broken__non_leader_unit(self):
+        """Test that non-leader units handle database-legacy relation broken correctly."""
+        self.harness.set_leader(False)
+        self.harness.enable_hooks()
+
+        # Setup: Add database relation
+        db_rel_id = self._add_database_legacy_relation()
+
+        # Set DSN as if database was connected (even though non-leader shouldn't set it)
+        self.harness.charm._state.dsn = "postgresql://user:pass@host:5432/livepatch-server"
+
+        # Start the service
+        container = self.harness.model.unit.get_container("livepatch")
+        self._start_service(container)
+
+        # Act: Remove the database relation
+        with patch("subprocess.check_call", return_value=None):
+            with patch("subprocess.check_output", return_value=b""):
+                self.harness.remove_relation(db_rel_id)
+
+        # Assert: Service should be stopped
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertFalse(service.is_running())
+
+        # Assert: Status should be BlockedStatus
+        self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
+        self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
+
+    def test_database_relation_broken__service_not_running(self):
+        """Test that database relation broken handles case where service is not running."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        # Setup: Add database relation but don't start service
+        db_rel_id = self._add_database_relation()
+
+        # Act: Remove the database relation without starting service
+        self.harness.remove_relation(db_rel_id)
+
+        # Assert: Should not crash and should set appropriate status
+        self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
+        self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
+
+        # Assert: DSN should be cleared
+        self.assertIsNone(self.harness.charm._state.dsn)
+
+    def test_database_legacy_relation_broken_then_fixed__service_recovers(self):
+        """Test that service stops and DSN clears on broken legacy relation, then recovers when relation is fixed."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        # The `ops-lib-pgsql` library calls `leader-get` and `leader-set` tools
+        # from juju help-tools, so we need to mock calls that try to spawn a subprocess.
+        stored_data = "'{}'"
+
+        def set_database_name_using_juju_leader_set(cmd: List[str]):
+            nonlocal stored_data
+            self.assertEqual(cmd[0], "leader-set")
+            self.assertTrue(cmd[1].startswith("interface.pgsql="))
+            stored_data = yaml.safe_dump(cmd[1].removeprefix("interface.pgsql="))
+
+        check_call_mock = Mock(side_effect=set_database_name_using_juju_leader_set)
+
+        def get_database_name_using_juju_leader_get(cmd: List[str]):
+            self.assertEqual(cmd[0], "leader-get")
+            return bytes(stored_data, "utf-8")
+
+        check_output_mock = Mock(side_effect=get_database_name_using_juju_leader_get)
+
+        # Setup: Add and configure legacy database relation
+        dsn_string = "postgresql://username:password@host:5432/livepatch-server"
+        legacy_db_rel_id = self._add_database_legacy_relation(dsn_string)
+
+        # Verify DSN is set
+        self.assertEqual(
+            self.harness.charm._state.dsn, dsn_string
+        )
+
+        # Start the service
+        container = self.harness.model.unit.get_container("livepatch")
+        self._start_service(container)
+
+        # Verify service is running
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertTrue(service.is_running())
+
+        # Act 1: Remove the database relation (triggers relation-broken)
+        with patch("subprocess.check_call", check_call_mock):
+            with patch("subprocess.check_output", check_output_mock):
+                self.harness.remove_relation(legacy_db_rel_id)
+
+        # Assert 1: Service should be stopped and DSN cleared
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertFalse(service.is_running())
+        self.assertIsNone(self.harness.charm._state.dsn)
+        self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
+        self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
+
+        # Act 2: Re-establish the legacy database relation (fixing the broken relation)
+        new_dsn_string = "postgresql://newuser:newpass@newhost:5432/livepatch-server"
+        self._add_database_legacy_relation(dsn_string=new_dsn_string)
+
+        # Verify DSN is updated with new connection details
+        self.assertEqual(
+            self.harness.charm._state.dsn, new_dsn_string
+        )
+
+        # Trigger pebble ready again to start the service with new relation
+        with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
+            migration.return_value = False
+            self.harness.charm.on.livepatch_pebble_ready.emit(container)
+
+        # Assert 2: Service should be running again with new DSN
+        service = container.get_service(LIVEPATCH_SERVICE_NAME)
+        self.assertTrue(service.is_running())
+        self.assertEqual(
+            self.harness.charm._state.dsn, new_dsn_string
+        )
+        self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)

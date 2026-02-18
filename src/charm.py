@@ -9,9 +9,9 @@ import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
-import yaml
 
 import pgsql
+import yaml
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
@@ -84,6 +84,10 @@ class LivepatchCharm(CharmBase):
         )
         self.framework.observe(self.legacy_db.on.master_changed, self._on_legacy_db_master_changed)
         self.framework.observe(self.legacy_db.on.standby_changed, self._on_legacy_db_standby_changed)
+        self.framework.observe(
+            self.on.database_legacy_relation_broken,
+            self._on_database_legacy_relation_broken,
+        )
 
         # Database
         self.database = DatabaseRequires(
@@ -99,6 +103,10 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(
             self.on.database_relation_changed,
             self._on_database_event,
+        )
+        self.framework.observe(
+            self.on.database_relation_broken,
+            self._on_database_relation_broken,
         )
 
         # Air-gapped pro/contracts
@@ -185,16 +193,7 @@ class LivepatchCharm(CharmBase):
 
     def on_stop(self, _):
         """On stop hook."""
-        container = self.unit.get_container(WORKLOAD_CONTAINER)
-        if container.can_connect():
-            try:
-                service = container.get_service(LIVEPATCH_SERVICE_NAME)
-            except ModelError:
-                LOGGER.warning("service not found, nothing to stop")
-                return
-            if service.is_running():
-                container.stop(LIVEPATCH_SERVICE_NAME)
-        self.unit.status = WaitingStatus("service stopped")
+        self._stop_service()
 
     def handle_schema_upgrade(self):
         """Check if a schema upgrade is required, and perform it."""
@@ -485,6 +484,34 @@ class LivepatchCharm(CharmBase):
         # the peer relation e.g. peer = `[c.uri for c in event.standbys]`
         return
 
+    def _stop_service(self) -> None:
+        """Stop the service without attempting to restart."""
+        container = self.unit.get_container(WORKLOAD_CONTAINER)
+        if container.can_connect():
+            try:
+                service = container.get_service(LIVEPATCH_SERVICE_NAME)
+            except ModelError:
+                LOGGER.debug("Attempted to stop service but it was not found in the container")
+                return
+            if service.is_running():
+                LOGGER.info("Stopping livepatch service")
+                container.stop(LIVEPATCH_SERVICE_NAME)
+            self.unit.status = WaitingStatus("service stopped")
+        else:
+            LOGGER.info("workload container not ready when trying to stop service")
+
+    def _clear_db_connection(self) -> None:
+        LOGGER.info("Clearing database connection string from state")
+        if self.unit.is_leader() and self._state.is_ready():
+            self._state.dsn = None
+
+    def _on_database_legacy_relation_broken(self, event: RelationEvent) -> None:
+        """Handle database-legacy relation broken event."""
+        LOGGER.info("(postgresql, legacy database relation) RELATION_BROKEN event fired.")
+        self._stop_service()
+        self._clear_db_connection()
+        self.unit.status = BlockedStatus("Database connection removed")
+
     # Database
 
     def _is_legacy_database_relation_activated(self) -> bool:
@@ -552,6 +579,13 @@ class LivepatchCharm(CharmBase):
             "password": relation_data.get("password"),
             "user": relation_data.get("username"),
         }
+
+    def _on_database_relation_broken(self, event: RelationEvent) -> None:
+        """Handle database relation broken event."""
+        LOGGER.info("(postgresql) RELATION_BROKEN event fired.")
+        self._stop_service()
+        self._clear_db_connection()
+        self.unit.status = BlockedStatus("Database connection removed")
 
     def _on_pro_airgapped_server_relation_changed(self, event: RelationChangedEvent):
         """Handle pro-airgapped-server relation-changed event."""

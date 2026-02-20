@@ -15,8 +15,8 @@ from helpers import (
     NGINX_INGRESS_CHARM_NAME,
     POSTGRESQL_CHANNEL,
     POSTGRESQL_NAME,
-    TRAEFIK_CHANNEL,
-    TRAEFIK_K8S_NAME,
+    GATEWAY_CHANNEL,
+    GATEWAY_API_K8S_NAME,
     WAITING_STATUS,
     get_unit_url,
     oci_image,
@@ -82,8 +82,8 @@ async def deploy_package(
     ingress_name = NGINX_INGRESS_CHARM_NAME
     ingress_channel = None
     if ingress_method == "traefik-route":
-        ingress_name = TRAEFIK_K8S_NAME
-        ingress_channel = TRAEFIK_CHANNEL
+        ingress_name = GATEWAY_API_K8S_NAME
+        ingress_channel = GATEWAY_CHANNEL
 
     asyncio.gather(
         deployed_application,
@@ -144,7 +144,7 @@ async def perform_livepatch_integrations(ops_test: OpsTest, ingress_method: Opti
     await ops_test.model.relate(f"{APP_NAME}:database", f"{POSTGRESQL_NAME}:database")
     if ingress_method == "traefik-route":
         # The traefik-k8s charm exposes the relation endpoint as `ingress`.
-        await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:ingress")
+        await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{GATEWAY_API_K8S_NAME}:ingress")
         return
     await ops_test.model.relate(f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
 
@@ -160,19 +160,21 @@ def get_charm_resources():
 async def switch_ingress_from_nginx_to_traefik(ops_test: OpsTest):
     """Switch the charms ingress from Nginx Ingress to Traefik."""
     await ops_test.model.deploy(
-            TRAEFIK_K8S_NAME,
+            GATEWAY_API_K8S_NAME,
             base="ubuntu@22.04",
-            channel=TRAEFIK_CHANNEL,
+            channel=GATEWAY_CHANNEL,
             trust=True,
-            application_name=TRAEFIK_K8S_NAME,
+            application_name=GATEWAY_API_K8S_NAME,
         )
-    await ops_test.model.wait_for_idle(apps=[TRAEFIK_K8S_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
+    await ops_test.model.wait_for_idle(
+        apps=[GATEWAY_API_K8S_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600
+    )
 
     await ops_test.juju("remove-relation", f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
-    await ops_test.model.applications[APP_NAME].set_config({"ingress-method": "traefik-route"})
+    await ops_test.model.applications[APP_NAME].set_config({"ingress-method": "gateway-route"})
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
-    await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{TRAEFIK_K8S_NAME}:ingress")
+    await ops_test.model.relate(f"{APP_NAME}:gateway-route", f"{GATEWAY_API_K8S_NAME}:ingress")
 
     status = await ops_test.model.get_status()  # noqa: F821
-    assert TRAEFIK_K8S_NAME in status["applications"]
+    assert GATEWAY_API_K8S_NAME in status["applications"]
     assert ops_test.model.applications[APP_NAME].status == ACTIVE_STATUS

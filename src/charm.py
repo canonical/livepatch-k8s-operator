@@ -16,10 +16,9 @@ from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
-from charms.traefik_k8s.v2.ingress import IngressPerAppReadyEvent, IngressPerAppRequirer
-
+from charms.gateway_api_integrator.v0.gateway_route import GatewayRouteRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
-from ops import pebble
+from ops import EventBase, pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, RelationDataContent, WaitingStatus
@@ -143,10 +142,10 @@ class LivepatchCharm(CharmBase):
         # Grafana dashboard relation
         self._grafana_dashboards = GrafanaDashboardProvider(self, relation_name="grafana-dashboard")
 
-    def _on_ingress_ready(self, event: IngressPerAppReadyEvent):
-        LOGGER.info("Ingress is ready, received URL: %s", event.url)
+    def _on_ingress_ready(self, event: EventBase):
+        LOGGER.info("Ingress is ready")
 
-    def _on_ingress_revoked(self, _):
+    def _on_ingress_removed(self, _):
         LOGGER.warning("Ingress relation revoked")
     def on_peer_relation_changed(self, event):
         """
@@ -276,7 +275,7 @@ class LivepatchCharm(CharmBase):
         # nginx-route is legacy; traefik-route is preferred for new deployments.
         if not ingress_method:
             LOGGER.warning("No ingress method specified, defaulting to nginx-route")
-            require_nginx_route(
+            self.ingress = require_nginx_route(
                 charm=self,
                 service_hostname=self.app.name,
                 service_name=self.app.name,
@@ -284,21 +283,21 @@ class LivepatchCharm(CharmBase):
             )
         elif ingress_method == "nginx-route":
             LOGGER.info("Ingress method specified as nginx-route")
-            require_nginx_route(
+            self.ingress = require_nginx_route(
                 charm=self,
                 service_hostname=self.app.name,
                 service_name=self.app.name,
                 service_port=SERVER_PORT,
             )
-        elif ingress_method == "traefik-route":
-            LOGGER.info("Ingress method specified as traefik-route")
-            self.ingress = IngressPerAppRequirer(
+        elif ingress_method == "gateway-route":
+            LOGGER.info("Ingress method specified as gateway-route")
+            self.ingress = GatewayRouteRequirer(
                 charm=self,
-                relation_name="traefik-route",
+                relation_name="gateway-route",
                 port=SERVER_PORT,
             )
             self.framework.observe(self.ingress.on.ready, self._on_ingress_ready)
-            self.framework.observe(self.ingress.on.revoked, self._on_ingress_revoked)
+            self.framework.observe(self.ingress.on.removed, self._on_ingress_removed)
         else:
             error_msg = f"Invalid ingress method specified: {ingress_method}"
             LOGGER.error(error_msg)

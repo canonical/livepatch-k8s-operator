@@ -12,7 +12,7 @@ import yaml
 from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
+from charms.gateway_api_integrator.v0.gateway_route import GatewayRouteRequirer
 
 from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT,LivepatchCharm
 from src.state import State
@@ -1429,44 +1429,6 @@ settings:
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
 
 
-class TestIngressMethod(unittest.TestCase):
-    """Ingress method tests."""
-
-    def _start_harness(self, ingress_default: str):
-        config_yaml = (
-            "options:\n"
-            "  ingress-method:\n"
-            "    type: string\n"
-            f"    default: {ingress_default!r}\n"
-        )
-        harness = Harness(LivepatchCharm, config=config_yaml)
-        self.addCleanup(harness.cleanup)
-        harness.disable_hooks()
-        harness.add_oci_resource("livepatch-server-image")
-        harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
-        harness.begin()
-        return harness
-
-    def test_ingress_default_uses_nginx_route(self):
-        """assert that nginx route is used when ingress method is not set or set to 'nginx-route'."""
-        with patch("src.charm.require_nginx_route") as require_nginx_route:
-            harness = self._start_harness("")
-
-        require_nginx_route.assert_called_once_with(
-            charm=harness.charm,
-            service_hostname=harness.charm.app.name,
-            service_name=harness.charm.app.name,
-            service_port=SERVER_PORT,
-        )
-
-    def test_ingress_traefik_route_uses_requirer(self):
-        """assert that the charm uses IngressPerAppRequirer if ingress method is set to 'traefik-route'."""
-        with patch("src.charm.require_nginx_route") as require_nginx_route:
-            harness = self._start_harness("traefik-route")
-
-        require_nginx_route.assert_not_called()
-        self.assertIsInstance(harness.charm.ingress, IngressPerAppRequirer)
-
     def _add_database_legacy_relation(self, dsn_string: str = "postgresql://user:pass@host:5432/livepatch-server"):
         """Helper method to add and configure a legacy database relation."""
         db_rel_id = self.harness.add_relation("database-legacy", "postgresql")
@@ -1686,3 +1648,43 @@ class TestIngressMethod(unittest.TestCase):
             self.harness.charm._state.dsn, new_dsn_string
         )
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
+
+
+class TestIngressMethod(unittest.TestCase):
+    """Ingress method tests."""
+
+    def _start_harness(self, ingress_default: str):
+        config_yaml = (
+            "options:\n"
+            "  ingress-method:\n"
+            "    type: string\n"
+            f"    default: {ingress_default!r}\n"
+        )
+        harness = Harness(LivepatchCharm, config=config_yaml)
+        self.addCleanup(harness.cleanup)
+        harness.disable_hooks()
+        harness.add_oci_resource("livepatch-server-image")
+        harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
+        harness.begin()
+        return harness
+
+    def test_ingress_default_uses_nginx_route(self):
+        """assert that nginx route is used when ingress method is not set or set to 'nginx-route'."""
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("")
+
+        require_nginx_route.assert_called_once_with(
+            charm=harness.charm,
+            service_hostname=harness.charm.app.name,
+            service_name=harness.charm.app.name,
+            service_port=SERVER_PORT,
+        )
+
+    def test_ingress_gateway_route_uses_requirer(self):
+        """assert that the charm uses GatewayRouteRequirer if ingress method is set to 'gateway-route'."""
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("gateway-route")
+
+        require_nginx_route.assert_not_called()
+        self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
+

@@ -20,7 +20,6 @@ POSTGRESQL_CHANNEL = "14/stable"
 PRO_AIRGAPPED_SERVER_NAME = "pro-airgapped-server"
 PRO_AIRGAPPED_SERVER_CHANNEL = "latest/stable"
 PRO_AIRGAPPED_SERVER_ENDPOINT = "livepatch-server"
-NGINX_INGRESS_CHARM_NAME = "nginx-ingress-integrator"
 ACTIVE_STATUS = ActiveStatus.name
 BLOCKED_STATUS = BlockedStatus.name
 WAITING_STATUS = WaitingStatus.name

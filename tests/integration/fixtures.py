@@ -1,4 +1,4 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 
@@ -11,10 +11,8 @@ from helpers import (
     ACTIVE_STATUS,
     APP_NAME,
     BLOCKED_STATUS,
-    NGINX_INGRESS_CHARM_NAME,
     POSTGRESQL_CHANNEL,
     POSTGRESQL_NAME,
-    WAITING_STATUS,
     get_unit_url,
     oci_image,
 )
@@ -24,7 +22,10 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.asyncio
-async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
+async def deploy_package(
+    ops_test: OpsTest,
+    use_current_stable: bool = False,
+):
     """
     Deploy the application and its dependencies.
 
@@ -78,7 +79,6 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
             trust=True,
             application_name=POSTGRESQL_NAME,
         ),
-        ops_test.model.deploy(NGINX_INGRESS_CHARM_NAME, trust=True, application_name=NGINX_INGRESS_CHARM_NAME),
     )
 
     async with ops_test.fast_forward():
@@ -89,18 +89,13 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
         logger.info(f"Waiting for {APP_NAME}")
         await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
-        logger.info(f"Waiting for {NGINX_INGRESS_CHARM_NAME}")
-        await ops_test.model.wait_for_idle(
-            apps=[NGINX_INGRESS_CHARM_NAME], status=WAITING_STATUS, raise_on_blocked=False, timeout=600
-        )
-
         logger.info("Making relations")
         await perform_livepatch_integrations(ops_test)
         await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
         logger.info("Setting server.url-template")
-        url = await get_unit_url(ops_test, application=NGINX_INGRESS_CHARM_NAME, unit=0, port=80)
-        url_template = url + "/v1/patches/{filename}"
+        url = await get_unit_url(ops_test, application=APP_NAME, unit=0, port=8080)
+        url_template = f"{url}/v1/patches/{{filename}}"
         logger.info(f"Set server.url-template to {url_template}")
         await ops_test.model.applications[APP_NAME].set_config({"server.url-template": url_template})
 
@@ -112,14 +107,13 @@ async def deploy_package(ops_test: OpsTest, use_current_stable: bool = False):
 
 
 async def perform_livepatch_integrations(ops_test: OpsTest):
-    """Add relations between Livepatch charm, postgresql-k8s, and nginx-ingress-integrator.
+    """Add relations between Livepatch charm and postgresql-k8s.
 
     Args:
         ops_test: PyTest object.
     """
     logger.info("Integrating Livepatch and Postgresql")
     await ops_test.model.relate(f"{APP_NAME}:database", f"{POSTGRESQL_NAME}:database")
-    await ops_test.model.relate(f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
 
 
 def get_charm_resources():
@@ -128,3 +122,4 @@ def get_charm_resources():
         "livepatch-server-image": oci_image("./metadata.yaml", "livepatch-server-image"),
         "livepatch-schema-upgrade-tool-image": oci_image("./metadata.yaml", "livepatch-schema-upgrade-tool-image"),
     }
+

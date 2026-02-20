@@ -58,8 +58,15 @@ requires:
     optional: true
   nginx-route:
     # This interface has replaced the old/deprecated `ingress` interface.
+    # This is a legacy interface, new deployments should use traefik-route instead. Integration with both of these interfaces at the same time will result in an error.
     interface: nginx-route
     optional: true
+  # This interface is intended to be used with the gatewayapi-k8s charm, which provides Ingress functionality via Gateway API.
+  # For backwards compatibility reasons, the charm can also work with the nginx-route interface, but this must be set in the configuration.
+  # Note that you may relate to both the nginx-route and gateway-route interfaces at the same time, but only one of them will be used, depending on the configuration.
+  gateway-route:
+        interface: gateway-route
+        limit: 1
   log-proxy:
     interface: loki_push_api
     optional: true

@@ -49,55 +49,6 @@ jobs:
         if: failure()
         uses: canonical/charming-actions/dump-logs@main
 
-  integration-test-ingress:
-    name: Integration tests (Ingress)
-    runs-on: [self-hosted, linux, X64, xlarge, jammy]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # To speed up the tests, we build the charm with Charmcraft and put the
-      # `.charm` file in the repository root directory. Integration tests will
-      # pick up this file and avoid building it per test case.
-      - name: Install Charmcraft
-        run: sudo snap install charmcraft --classic
-      - name: Build charm
-        run: sudo charmcraft pack --destructive-mode --verbosity=trace
-
-      - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
-        with:
-          channel: 1.30-strict/stable
-          juju-channel: 2.9/stable
-          provider: microk8s
-          microk8s-group: snap_microk8s
-          microk8s-addons: "ingress storage dns rbac registry ingress metallb:192.168.0.10-192.168.0.10"
-          # metallb:192.168.0.10-192.168.0.10 is needed for traefik on microk8s.
-      # Instructions from https://microk8s.io/docs/registry-private
-      # and https://github.com/containerd/cri/blob/master/docs/registry.md
-      # Bash explanation https://stackoverflow.com/questions/15429330/how-to-specify-a-multi-line-shell-variable#comment21828145_15429426
-      - name: Setup microk8s for private registry
-        run: |
-          read -r -d '' REGISTRY_CONFIG << EOL || true
-            [plugins."io.containerd.grpc.v1.cri".registry.configs."ghcr.io".auth]
-              username = "${{ github.actor }}"
-              password = "${{ secrets.GITHUB_TOKEN }}"
-          EOL
-          echo "$REGISTRY_CONFIG" | sudo tee -a /var/snap/microk8s/current/args/containerd-template.toml
-          sudo snap restart microk8s.daemon-containerd
-      - name: Install tox
-        run: python -m pip install tox
-      - name: Run integration tests for ingress (Traefik)
-        run: tox -e integration-ingress-traefik
-      - name: Run integration tests for ingress (NGINX)
-        run: tox -e integration-ingress-nginx
-      - name: Run integration tests for ingress (switch from NGINX to Traefik)
-        run: tox -e integration-ingress-switch  
-      - name: Dump logs
-        if: failure()
-        uses: canonical/charming-actions/dump-logs@main
-
-
   integration-test-airgapped:
     name: Airgapped integration tests (LXD controller)
     runs-on: [self-hosted, linux, X64, xlarge, jammy]

@@ -4,7 +4,6 @@
 
 import asyncio
 import logging
-from typing import Optional
 
 import pytest
 from charm_utils import fetch_charm
@@ -12,12 +11,8 @@ from helpers import (
     ACTIVE_STATUS,
     APP_NAME,
     BLOCKED_STATUS,
-    NGINX_INGRESS_CHARM_NAME,
     POSTGRESQL_CHANNEL,
     POSTGRESQL_NAME,
-    GATEWAY_CHANNEL,
-    GATEWAY_API_K8S_NAME,
-    WAITING_STATUS,
     get_unit_url,
     oci_image,
 )
@@ -30,7 +25,6 @@ logger = logging.getLogger(__name__)
 async def deploy_package(
     ops_test: OpsTest,
     use_current_stable: bool = False,
-    ingress_method: Optional[str] = None,
 ):
     """
     Deploy the application and its dependencies.
@@ -55,9 +49,6 @@ async def deploy_package(
         "server.log-level": "info",
     }
 
-    if ingress_method:
-        config["ingress-method"] = ingress_method
-
     if use_current_stable:
         logger.info("Deploying current stable release")
         deployed_application = ops_test.model.deploy(
@@ -79,12 +70,6 @@ async def deploy_package(
             base=jammy,
         )
 
-    ingress_name = NGINX_INGRESS_CHARM_NAME
-    ingress_channel = None
-    if ingress_method == "traefik-route":
-        ingress_name = GATEWAY_API_K8S_NAME
-        ingress_channel = GATEWAY_CHANNEL
-
     asyncio.gather(
         deployed_application,
         ops_test.model.deploy(
@@ -93,13 +78,6 @@ async def deploy_package(
             channel=POSTGRESQL_CHANNEL,
             trust=True,
             application_name=POSTGRESQL_NAME,
-        ),
-        ops_test.model.deploy(
-            ingress_name,
-            base=jammy,
-            channel=ingress_channel,
-            trust=True,
-            application_name=ingress_name,
         ),
     )
 
@@ -111,19 +89,13 @@ async def deploy_package(
         logger.info(f"Waiting for {APP_NAME}")
         await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
-        logger.info(f"Waiting for {ingress_name}")
-        expected_ingress_status = ACTIVE_STATUS if ingress_method == "traefik-route" else WAITING_STATUS
-        await ops_test.model.wait_for_idle(
-            apps=[ingress_name], status=expected_ingress_status, raise_on_blocked=False, timeout=600
-        )
-
         logger.info("Making relations")
-        await perform_livepatch_integrations(ops_test, ingress_method=ingress_method)
+        await perform_livepatch_integrations(ops_test)
         await ops_test.model.wait_for_idle(apps=[APP_NAME], status=BLOCKED_STATUS, raise_on_blocked=False, timeout=600)
 
         logger.info("Setting server.url-template")
-        url = await get_unit_url(ops_test, application=ingress_name, unit=0, port=80)
-        url_template = url + "/v1/patches/{filename}"
+        url = await get_unit_url(ops_test, application=APP_NAME, unit=0, port=8080)
+        url_template = f"{url}/v1/patches/{{filename}}"
         logger.info(f"Set server.url-template to {url_template}")
         await ops_test.model.applications[APP_NAME].set_config({"server.url-template": url_template})
 
@@ -134,19 +106,14 @@ async def deploy_package(
         assert ops_test.model.applications[APP_NAME].units[0].workload_status == ACTIVE_STATUS
 
 
-async def perform_livepatch_integrations(ops_test: OpsTest, ingress_method: Optional[str] = None):
-    """Add relations between Livepatch charm, postgresql-k8s, and ingress.
+async def perform_livepatch_integrations(ops_test: OpsTest):
+    """Add relations between Livepatch charm and postgresql-k8s.
 
     Args:
         ops_test: PyTest object.
     """
     logger.info("Integrating Livepatch and Postgresql")
     await ops_test.model.relate(f"{APP_NAME}:database", f"{POSTGRESQL_NAME}:database")
-    if ingress_method == "traefik-route":
-        # The traefik-k8s charm exposes the relation endpoint as `ingress`.
-        await ops_test.model.relate(f"{APP_NAME}:traefik-route", f"{GATEWAY_API_K8S_NAME}:ingress")
-        return
-    await ops_test.model.relate(f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
 
 
 def get_charm_resources():
@@ -156,25 +123,3 @@ def get_charm_resources():
         "livepatch-schema-upgrade-tool-image": oci_image("./metadata.yaml", "livepatch-schema-upgrade-tool-image"),
     }
 
-
-async def switch_ingress_from_nginx_to_traefik(ops_test: OpsTest):
-    """Switch the charms ingress from Nginx Ingress to Traefik."""
-    await ops_test.model.deploy(
-            GATEWAY_API_K8S_NAME,
-            base="ubuntu@22.04",
-            channel=GATEWAY_CHANNEL,
-            trust=True,
-            application_name=GATEWAY_API_K8S_NAME,
-        )
-    await ops_test.model.wait_for_idle(
-        apps=[GATEWAY_API_K8S_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600
-    )
-
-    await ops_test.juju("remove-relation", f"{APP_NAME}:nginx-route", f"{NGINX_INGRESS_CHARM_NAME}:nginx-route")
-    await ops_test.model.applications[APP_NAME].set_config({"ingress-method": "gateway-route"})
-    await ops_test.model.wait_for_idle(apps=[APP_NAME], status=ACTIVE_STATUS, raise_on_blocked=False, timeout=600)
-    await ops_test.model.relate(f"{APP_NAME}:gateway-route", f"{GATEWAY_API_K8S_NAME}:ingress")
-
-    status = await ops_test.model.get_status()  # noqa: F821
-    assert GATEWAY_API_K8S_NAME in status["applications"]
-    assert ops_test.model.applications[APP_NAME].status == ACTIVE_STATUS

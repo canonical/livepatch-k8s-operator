@@ -58,7 +58,7 @@ requires:
     optional: true
   nginx-route:
     # This interface has replaced the old/deprecated `ingress` interface.
-    # This is a legacy interface, new deployments should use traefik-route instead. Integration with both of these interfaces at the same time will result in an error.
+    # This is a legacy interface, new deployments should use gateway-route instead. Integration with both of these interfaces at the same time will result in an error.
     interface: nginx-route
     optional: true
   # This interface is intended to be used with the gatewayapi-k8s charm, which provides Ingress functionality via Gateway API.

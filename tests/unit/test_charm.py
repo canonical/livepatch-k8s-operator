@@ -1662,14 +1662,13 @@ class TestIngressMethod(unittest.TestCase):
         )
         harness = Harness(LivepatchCharm, config=config_yaml)
         self.addCleanup(harness.cleanup)
-        harness.disable_hooks()
         harness.add_oci_resource("livepatch-server-image")
         harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
         harness.begin()
         return harness
 
     def test_ingress_default_uses_nginx_route(self):
-        """assert that nginx route is used when ingress method is not set or set to 'nginx-route'."""
+        """assert that nginx route is used when ingress method is not set."""
         with patch("src.charm.require_nginx_route") as require_nginx_route:
             harness = self._start_harness("")
 
@@ -1687,4 +1686,83 @@ class TestIngressMethod(unittest.TestCase):
 
         require_nginx_route.assert_not_called()
         self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
+    
+    def test_ingress_use_nginx_route_after_gateway_route(self):
+        """"assert that the charm uses nginx route if ingress method is set to 'nginx-route' after being set to 'gateway-route'."""
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("gateway-route")
 
+            # Update config to use nginx route
+            harness.update_config({"ingress-method": "nginx-route"})
+
+        require_nginx_route.assert_called_once_with(
+            charm=harness.charm,
+            service_hostname=harness.charm.app.name,
+            service_name=harness.charm.app.name,
+            service_port=SERVER_PORT,   
+        )
+
+    def test_ingress_use_gateway_route_after_nginx_route(self):
+        """"assert that the charm uses GatewayRouteRequirer if ingress method is set to 'gateway-route' after being set to 'nginx-route'."""
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("nginx-route")
+
+            # Update config to use gateway route
+            harness.update_config({"ingress-method": "gateway-route"})
+
+        self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
+
+    def test_ingress_blocked_on_invalid_method(self):
+        """assert that the charm is Blocked if an invalid ingress method is set."""
+        harness = self._start_harness("invalid-ingress")
+
+        self.assertIsInstance(harness.charm.unit.status, BlockedStatus)
+        self.assertEqual(harness.charm.unit.status.message, "Invalid ingress method specified: invalid-ingress")
+
+    def test_ingress_blocked_on_invalid_method_then_nginx(self):
+        """assert that the charm transitions from Blocked to Active when nginx-route is set after an invalid one."""
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("invalid-ingress")
+
+            self.assertIsInstance(harness.charm.unit.status, BlockedStatus)
+            self.assertEqual(
+                harness.charm.unit.status.message,
+                "Invalid ingress method specified: invalid-ingress",
+            )
+
+            # Update config to use a valid ingress method
+            harness.update_config({"ingress-method": "nginx-route"})
+
+        require_nginx_route.assert_called_once_with(
+            charm=harness.charm,
+            service_hostname=harness.charm.app.name,
+            service_name=harness.charm.app.name,
+            service_port=SERVER_PORT,
+        )
+
+    def test_ingress_blocked_on_invalid_method_then_gateway(self):
+        """assert that the charm transitions from Blocked to Active when gateway-route  is set after an invalid one."""
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
+            harness = self._start_harness("invalid-ingress")
+
+            self.assertIsInstance(harness.charm.unit.status, BlockedStatus)
+            self.assertEqual(
+                harness.charm.unit.status.message,
+                "Invalid ingress method specified: invalid-ingress",
+            )
+
+            # Update config to use a valid ingress method
+            harness.update_config({"ingress-method": "gateway-route"})
+
+        require_nginx_route.assert_not_called()
+        self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
+
+    def test_ingress_nginx_to_gateway_back_to_nginx(self):
+        """assert that switching between nginx and gateway ingress methods multiple times does not raise duplicate object exceptions."""
+        harness = self._start_harness("nginx-route")
+
+        # Switch to gateway route
+        harness.update_config({"ingress-method": "gateway-route"})
+
+        # Switch back to nginx route
+        harness.update_config({"ingress-method": "nginx-route"})

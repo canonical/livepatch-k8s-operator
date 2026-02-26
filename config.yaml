@@ -58,7 +58,7 @@ options:
     default: ""
     description: |
       Select the ingress integration. Leave empty to default to nginx-route for
-      backward compatibility. Use "traefik-route" for new deployments.
+      backward compatibility. Use "gateway-route" for new deployments.
     type: string
 
   auth.basic.enabled:

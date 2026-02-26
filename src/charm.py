@@ -60,6 +60,9 @@ class LivepatchCharm(CharmBase):
 
         self._state = State(self.app, lambda: self.model.get_relation("livepatch"))
 
+        # cache ingress type so we can make update_ingress_method idempotent.
+        self._configured_ingress = None
+
         self.framework.observe(self.on.livepatch_relation_changed, self.on_peer_relation_changed)
         self.framework.observe(self.on.config_changed, self.on_config_changed)
         self.framework.observe(self.on.update_status, self.on_update_status)
@@ -142,11 +145,6 @@ class LivepatchCharm(CharmBase):
         # Grafana dashboard relation
         self._grafana_dashboards = GrafanaDashboardProvider(self, relation_name="grafana-dashboard")
 
-    def _on_ingress_ready(self, event: EventBase):
-        LOGGER.info("Ingress is ready")
-
-    def _on_ingress_removed(self, _):
-        LOGGER.warning("Ingress relation revoked")
     def on_peer_relation_changed(self, event):
         """
         On peer relation changed hook.
@@ -166,6 +164,7 @@ class LivepatchCharm(CharmBase):
 
     def on_config_changed(self, event):
         """On config changed hook, which runs first."""
+        self._update_ingress_method()
         self._update_workload_container_config(event)
 
     def on_start(self, event):
@@ -272,32 +271,29 @@ class LivepatchCharm(CharmBase):
         ingress_method = self.config.get("ingress-method")
 
         # Keep backwards compatibility: default to nginx-route when not configured.
-        # nginx-route is legacy; traefik-route is preferred for new deployments.
-        if not ingress_method:
-            LOGGER.warning("No ingress method specified, defaulting to nginx-route")
-            self.ingress = require_nginx_route(
-                charm=self,
-                service_hostname=self.app.name,
-                service_name=self.app.name,
-                service_port=SERVER_PORT,
-            )
-        elif ingress_method == "nginx-route":
+        # nginx-route is legacy; gateway-route is preferred for new deployments.
+        # This operation is idempotent, so it will not cause issues if called multiple times during the charm lifecycle, such as on config changes or leader election.
+        if not ingress_method or ingress_method == "nginx-route":
             LOGGER.info("Ingress method specified as nginx-route")
-            self.ingress = require_nginx_route(
+
+            if not self._configured_ingress or self._configured_ingress != "nginx-route":
+                self.ingress = require_nginx_route(
                 charm=self,
                 service_hostname=self.app.name,
                 service_name=self.app.name,
                 service_port=SERVER_PORT,
-            )
+                )
+                self._configured_ingress = "nginx-route"
+
         elif ingress_method == "gateway-route":
             LOGGER.info("Ingress method specified as gateway-route")
-            self.ingress = GatewayRouteRequirer(
+            if not self._configured_ingress or self._configured_ingress != "gateway-route":
+                self.ingress = GatewayRouteRequirer(
                 charm=self,
                 relation_name="gateway-route",
                 port=SERVER_PORT,
-            )
-            self.framework.observe(self.ingress.on.ready, self._on_ingress_ready)
-            self.framework.observe(self.ingress.on.removed, self._on_ingress_removed)
+                )
+                self._configured_ingress = "gateway-route"
         else:
             error_msg = f"Invalid ingress method specified: {ingress_method}"
             LOGGER.error(error_msg)

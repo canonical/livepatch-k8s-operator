@@ -273,7 +273,7 @@ class LivepatchCharm(CharmBase):
         # Keep backwards compatibility: default to nginx-route when not configured.
         # nginx-route is legacy; gateway-route is preferred for new deployments.
         # This operation is idempotent, so it will not cause issues if called multiple times during the charm lifecycle, such as on config changes or leader election.
-        if not ingress_method or ingress_method == "nginx-route":
+        if ingress_method == "nginx-route":
             LOGGER.info("Ingress method specified as nginx-route")
 
             if not self._configured_ingress or self._configured_ingress != "nginx-route":

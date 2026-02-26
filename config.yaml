@@ -55,9 +55,9 @@ options:
     type: boolean
 
   ingress-method:
-    default: ""
+    default: "nginx-route"
     description: |
-      Select the ingress integration. Leave empty to default to nginx-route for
+      Select the ingress integration. Defaults to "nginx-route" for
       backward compatibility. Use "gateway-route" for new deployments.
     type: string
 

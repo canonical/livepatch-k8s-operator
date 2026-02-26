@@ -1654,13 +1654,17 @@ class TestIngressMethod(unittest.TestCase):
     """Ingress method tests."""
 
     def _start_harness(self, ingress_default: str):
-        config_yaml = (
+        if ingress_default != "":
+            config_yaml = (
             "options:\n"
             "  ingress-method:\n"
             "    type: string\n"
             f"    default: {ingress_default!r}\n"
-        )
-        harness = Harness(LivepatchCharm, config=config_yaml)
+            )
+            harness = Harness(LivepatchCharm, config=config_yaml)
+        else:
+            harness = Harness(LivepatchCharm)
+            
         self.addCleanup(harness.cleanup)
         harness.add_oci_resource("livepatch-server-image")
         harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
@@ -1766,3 +1770,4 @@ class TestIngressMethod(unittest.TestCase):
 
         # Switch back to nginx route
         harness.update_config({"ingress-method": "nginx-route"})
+       

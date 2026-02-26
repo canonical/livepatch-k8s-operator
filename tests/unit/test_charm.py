@@ -1766,4 +1766,4 @@ class TestIngressMethod(unittest.TestCase):
 
         # Switch back to nginx route
         harness.update_config({"ingress-method": "nginx-route"})
-        
+       

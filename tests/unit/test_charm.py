@@ -244,7 +244,7 @@ class TestCharm(unittest.TestCase):
             )
 
             def throw():
-                raise pebble.ExecError([], 1, "", "some error")
+                raise pebble.ExecError(["/usr/local/bin/livepatch-schema-tool"], 1, "", "some error")
 
             process_mock = Mock()
             process_mock.wait_output.side_effect = throw
@@ -257,7 +257,7 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             ex.exception.message,
-            "schema migration failed: non-zero exit code 1 executing [], stdout='', stderr='some error'",
+            "schema migration failed: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
 
     def test_on_config_changed__failure__cannot_connect_to_schema_upgrade_container(self):

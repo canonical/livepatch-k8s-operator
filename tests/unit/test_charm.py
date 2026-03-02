@@ -1692,7 +1692,8 @@ class TestIngressMethod(unittest.TestCase):
         self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
     
     def test_ingress_use_nginx_route_after_gateway_route(self):
-        """"assert that the charm uses nginx route if ingress method is set to 'nginx-route' after being set to 'gateway-route'."""
+        """Assert that the charm uses nginx route if ingress method is set to 'nginx-route' after
+        being set to 'gateway-route'."""
         with patch("src.charm.require_nginx_route") as require_nginx_route:
             harness = self._start_harness("gateway-route")
 
@@ -1707,8 +1708,9 @@ class TestIngressMethod(unittest.TestCase):
         )
 
     def test_ingress_use_gateway_route_after_nginx_route(self):
-        """"assert that the charm uses GatewayRouteRequirer if ingress method is set to 'gateway-route' after being set to 'nginx-route'."""
-        with patch("src.charm.require_nginx_route") as require_nginx_route:
+        """Assert that the charm uses GatewayRouteRequirer if ingress method is set to
+        'gateway-route' after being set to 'nginx-route'."""
+        with patch("src.charm.require_nginx_route"):
             harness = self._start_harness("nginx-route")
 
             # Update config to use gateway route
@@ -1762,7 +1764,8 @@ class TestIngressMethod(unittest.TestCase):
         self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
 
     def test_ingress_nginx_to_gateway_back_to_nginx(self):
-        """assert that switching between nginx and gateway ingress methods multiple times does not raise duplicate object exceptions."""
+        """Assert that switching between nginx and gateway ingress methods multiple times
+        does not raise duplicate object exceptions."""
         harness = self._start_harness("nginx-route")
 
         # Switch to gateway route

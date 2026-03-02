@@ -18,7 +18,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.gateway_api_integrator.v0.gateway_route import GatewayRouteRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
-from ops import EventBase, pebble
+from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, RelationDataContent, WaitingStatus
@@ -272,7 +272,9 @@ class LivepatchCharm(CharmBase):
 
         # Keep backwards compatibility: default to nginx-route when not configured.
         # nginx-route is legacy; gateway-route is preferred for new deployments.
-        # This operation is idempotent, so it will not cause issues if called multiple times during the charm lifecycle, such as on config changes or leader election.
+        # This operation is idempotent, so it will not cause issues if called
+        # multiple times during the charm lifecycle, such as on config changes
+        # or leader election.
         if ingress_method == "nginx-route":
             LOGGER.info("Ingress method specified as nginx-route")
 

@@ -29,6 +29,7 @@ from state import State
 
 SERVER_PORT = 8080
 DATABASE_NAME = "livepatch-server"
+METRICS_DB_NAME = "livepatch-metrics-db"
 LOG_FILE = "/var/log/livepatch"
 LOGROTATE_CONFIG_PATH = "/etc/logrotate.d/livepatch"
 LIVEPATCH_SERVICE_NAME = "livepatch"
@@ -37,6 +38,7 @@ DATABASE_RELATION = "database"
 DATABASE_RELATION_LEGACY = "database-legacy"
 PRO_AIRGAPPED_SERVER_RELATION = "pro-airgapped-server"
 CVE_CATALOG_RELATION = "cve-catalog"
+METRICS_DB_RELATION = "metrics-db"
 
 REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
@@ -97,6 +99,20 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(
             self.on.database_relation_changed,
             self._on_database_event,
+        )
+        self.metrics_db = DatabaseRequires(
+            self,
+            relation_name=METRICS_DB_RELATION,
+            database_name=METRICS_DB_NAME,
+        )
+        self.framework.observe(self.metrics_db.on.database_created, self._on_metrics_db_event)
+        self.framework.observe(
+            self.metrics_db.on.endpoints_changed,
+            self._on_metrics_db_event,
+        )
+        self.framework.observe(
+            self.on.metrics_db_relation_changed,
+            self._on_metrics_db_event,
         )
 
         # Air-gapped pro/contracts
@@ -245,6 +261,15 @@ class LivepatchCharm(CharmBase):
             # Note that other env vars are already set from the configuration.
             env_vars["LP_CVE_SYNC_ENABLED"] = True
             env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
+        
+        # MetricsDB integration should only be used if not using InfluxDB.
+        # Using influx for kpi monitoring is deprecated and will be removed soon.
+        dsn_metrics = getattr(self._state, "dsn_metrics", None)
+        if not self.config.get("influx.enabled") and self.metrics_db.relations and dsn_metrics:
+            env_vars["LP_TIMESCALE_DB_CONNECTION_STRING"] = dsn_metrics
+            env_vars["LP_TIMESCALE_DB_CONNECTION_POOL_MAX"] = self.config.get("timescale.connection-pool-max")
+            env_vars["LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX"] = self.config.get("timescale.connection-lifetime-max")
+            env_vars["LP_TIMESCALE_DB_WORK_MEM"] = self.config.get("timescale.work_mem")
 
         # Some extra config and checks
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn
@@ -475,7 +500,7 @@ class LivepatchCharm(CharmBase):
                 f"`{DATABASE_RELATION_LEGACY}` is already activated."
             )
 
-        dbconn = self._get_db_info()
+        dbconn = self._get_db_info(self.database)
         if dbconn is None:
             LOGGER.info("no database connection info found, deferring event")
             event.defer()
@@ -495,14 +520,14 @@ class LivepatchCharm(CharmBase):
 
         self._update_workload_container_config(event)
 
-    def _get_db_info(self) -> Optional[Dict]:
-        """Get database connection info by reading relation data."""
-        if len(self.database.relations) == 0 or not self.database.is_resource_created():
+    def _get_db_info(self, db_relation) -> Optional[Dict]:
+        """Get database connection info by reading relation data from a given relation object."""
+        if len(db_relation.relations) == 0 or not db_relation.is_resource_created():
             LOGGER.debug("no (postgresql) database relation found or resource not created")
             return None
 
-        db_relation_id = self.database.relations[0].id
-        relation_data = self.database.fetch_relation_data().get(db_relation_id, None)
+        db_relation_id = db_relation.relations[0].id
+        relation_data = db_relation.fetch_relation_data().get(db_relation_id, None)
         if not relation_data:
             LOGGER.debug("no relation data found for relation %s", db_relation_id)
             return None
@@ -515,6 +540,38 @@ class LivepatchCharm(CharmBase):
             "password": relation_data.get("password"),
             "user": relation_data.get("username"),
         }
+
+    def _on_metrics_db_event(self, event: RelationEvent) -> None:
+        """Metrics database event handler."""
+        if not self.model.unit.is_leader():
+            return
+
+        LOGGER.info("(metrics-db) %s event fired.", event.relation.name)
+
+        if not self._state.is_ready():
+            event.defer()
+            LOGGER.warning("State is not ready")
+            return
+
+        dbconn = self._get_db_info(self.metrics_db)
+        if dbconn is None:
+            LOGGER.info("no database connection info found, deferring event")
+            event.defer()
+            return
+
+        ep = dbconn["endpoint"]
+        user = dbconn["user"]
+        password = dbconn["password"]
+
+        uri = f"postgresql://{user}:{password}@{ep}/{METRICS_DB_NAME}"
+        redacted_uri = f"postgresql://{user}:****@{ep}/{METRICS_DB_NAME}"
+
+        LOGGER.info(f"received database uri: {redacted_uri}")
+
+        # record the connection string
+        self._state.dsn_metrics = uri
+
+        self._update_workload_container_config(event)
 
     def _on_pro_airgapped_server_relation_changed(self, event: RelationChangedEvent):
         """Handle pro-airgapped-server relation-changed event."""

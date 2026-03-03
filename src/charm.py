@@ -95,7 +95,11 @@ class LivepatchCharm(CharmBase):
             relation_name=DATABASE_RELATION,
             database_name=DATABASE_NAME,
         )
-        self.framework.observe(self.database.on.database_created, self._on_database_event)
+        self.framework.observe(
+            self.database.on.database_created, 
+            self._on_database_event
+        )
+        
         self.framework.observe(
             self.database.on.endpoints_changed,
             self._on_database_event,
@@ -104,12 +108,23 @@ class LivepatchCharm(CharmBase):
             self.on.database_relation_changed,
             self._on_database_event,
         )
+
+        self.framework.observe(
+            self.on.database_relation_broken,
+            self._on_database_relation_broken,
+        )
+
+        # MetricsDB
         self.metrics_db = DatabaseRequires(
             self,
             relation_name=METRICS_DB_RELATION,
             database_name=METRICS_DB_NAME,
         )
-        self.framework.observe(self.metrics_db.on.database_created, self._on_metrics_db_event)
+        self.framework.observe(
+            self.metrics_db.on.database_created, 
+            self._on_metrics_db_event
+            )
+
         self.framework.observe(
             self.metrics_db.on.endpoints_changed,
             self._on_metrics_db_event,
@@ -117,9 +132,6 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(
             self.on.metrics_db_relation_changed,
             self._on_metrics_db_event,
-        self.framework.observe(
-            self.on.database_relation_broken,
-            self._on_database_relation_broken,
         )
 
         # Air-gapped pro/contracts

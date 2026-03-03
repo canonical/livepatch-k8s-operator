@@ -14,6 +14,7 @@ from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
 from charms.gateway_api_integrator.v0.gateway_route import GatewayRouteRequirer
 
+from charms.nginx_ingress_integrator.v0.nginx_route import NginxRouteRequirer
 from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT,LivepatchCharm
 from src.state import State
 
@@ -1770,7 +1771,9 @@ class TestIngressMethod(unittest.TestCase):
 
         # Switch to gateway route
         harness.update_config({"ingress-method": "gateway-route"})
+        self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
+
 
         # Switch back to nginx route
         harness.update_config({"ingress-method": "nginx-route"})
-       
+        self.assertIsInstance(harness.charm.ingress, NginxRouteRequirer)

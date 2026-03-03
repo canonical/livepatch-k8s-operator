@@ -27,7 +27,7 @@ class TestMetricsDBFunctionality(unittest.TestCase):
             metrics_rel_id: {
                 "endpoints": "postgres.example.com:5432,postgres2.example.com:5432",
                 "username": "metrics_user",
-                "password": "metrics_pass",
+                "password": "metrics_pass", # nosec B105
             }
         }
 

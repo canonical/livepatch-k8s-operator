@@ -1441,7 +1441,7 @@ settings:
             {
                 "endpoints": "postgres.local:5432",
                 "username": "tsuser",
-                "password": "tspass",
+                "password": "tspass",  # nosec B105
             },
         )
 
@@ -1545,7 +1545,7 @@ settings:
             {
                 "endpoints": "postgresql://postgres.local:5432",
                 "username": "tsuser", 
-                "password": "tspass",
+                "password": "tspass", # nosec B105
             },
         )
 

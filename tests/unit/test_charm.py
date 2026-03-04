@@ -15,7 +15,7 @@ from ops.testing import ActionFailed, Harness
 from charms.gateway_api_integrator.v0.gateway_route import GatewayRouteRequirer
 
 from charms.nginx_ingress_integrator.v0.nginx_route import NginxRouteRequirer
-from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT,LivepatchCharm
+from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT, LivepatchCharm
 from src.state import State
 
 APP_NAME = "canonical-livepatch-server-k8s"

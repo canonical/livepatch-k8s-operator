@@ -1697,9 +1697,10 @@ class TestIngressMethod(unittest.TestCase):
         being set to 'gateway-route'."""
         with patch("src.charm.require_nginx_route") as require_nginx_route:
             harness = self._start_harness("gateway-route")
-
+            self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
             # Update config to use nginx route
             harness.update_config({"ingress-method": "nginx-route"})
+            self.assertEqual(harness.charm.ingress, require_nginx_route.return_value)
 
         require_nginx_route.assert_called_once_with(
             charm=harness.charm,
@@ -1711,13 +1712,13 @@ class TestIngressMethod(unittest.TestCase):
     def test_ingress_use_gateway_route_after_nginx_route(self):
         """Assert that the charm uses GatewayRouteRequirer if ingress method is set to
         'gateway-route' after being set to 'nginx-route'."""
-        with patch("src.charm.require_nginx_route"):
+        with patch("src.charm.require_nginx_route") as require_nginx_route:
             harness = self._start_harness("nginx-route")
+            self.assertEqual(harness.charm.ingress, require_nginx_route.return_value)
 
             # Update config to use gateway route
             harness.update_config({"ingress-method": "gateway-route"})
-
-        self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
+            self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)
 
     def test_ingress_blocked_on_invalid_method(self):
         """assert that the charm is Blocked if an invalid ingress method is set."""
@@ -1768,7 +1769,7 @@ class TestIngressMethod(unittest.TestCase):
         """Assert that switching between nginx and gateway ingress methods multiple times
         does not raise duplicate object exceptions."""
         harness = self._start_harness("nginx-route")
-
+        self.assertIsInstance(harness.charm.ingress, NginxRouteRequirer)
         # Switch to gateway route
         harness.update_config({"ingress-method": "gateway-route"})
         self.assertIsInstance(harness.charm.ingress, GatewayRouteRequirer)

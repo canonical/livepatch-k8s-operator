@@ -1376,6 +1376,15 @@ settings:
             }
         )
 
+        self._assert_environment_contains(
+            {
+                "LP_LSN_SYNC_ENABLED": True,
+                "LP_LSN_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
+                "LP_LSN_SYNC_INTERVAL": "1h",  # Default config value.
+                "LP_LSN_SYNC_TIMEOUT": "5m",  # Default config value.
+            }
+        )
+
     def test_cve_catalog_relation__relation_removed(self):
         """Test when cve-catalog is removed."""
         self.harness.set_leader(True)
@@ -1413,6 +1422,15 @@ settings:
                 }
             )
 
+            self._assert_environment_contains(
+            {
+                "LP_LSN_SYNC_ENABLED": True,
+                "LP_LSN_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
+                "LP_LSN_SYNC_INTERVAL": "1h",  # Default config value.
+                "LP_LSN_SYNC_TIMEOUT": "5m",  # Default config value.
+            }
+        )
+
             # Now we remove the relation.
             self.harness.remove_relation(cves_rel_id)
 
@@ -1420,6 +1438,9 @@ settings:
                 {
                     "LP_CVE_LOOKUP_ENABLED": False,
                     "LP_CVE_SYNC_ENABLED": False,
+                    "LP_LSN_SYNC_ENABLED": False,
+                    "LP_CVE_SYNC_SOURCE_URL": "",
+                    "LP_LSN_SYNC_SOURCE_URL": "",
                 },
             )
 

@@ -243,6 +243,8 @@ class LivepatchCharm(CharmBase):
             # Note that other env vars are already set from the configuration.
             env_vars["LP_CVE_SYNC_ENABLED"] = True
             env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
+            env_vars["LP_LSN_SYNC_ENABLED"] = True
+            env_vars["LP_LSN_SYNC_SOURCE_URL"] = cve_service_address
 
         # Some extra config and checks
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn

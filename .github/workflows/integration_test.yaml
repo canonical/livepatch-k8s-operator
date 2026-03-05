@@ -48,6 +48,7 @@ jobs:
       - name: Dump logs
         if: failure()
         uses: canonical/charming-actions/dump-logs@main
+
   integration-test-airgapped:
     name: Airgapped integration tests (LXD controller)
     runs-on: [self-hosted, linux, X64, xlarge, jammy]

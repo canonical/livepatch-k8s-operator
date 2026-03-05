@@ -16,6 +16,7 @@ from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
+from charms.gateway_api_integrator.v0.gateway_route import GatewayRouteRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
@@ -58,6 +59,9 @@ class LivepatchCharm(CharmBase):
         super().__init__(*args)
 
         self._state = State(self.app, lambda: self.model.get_relation("livepatch"))
+
+        # cache ingress type so we can make update_ingress_method idempotent.
+        self._configured_ingress = None
 
         self.framework.observe(self.on.livepatch_relation_changed, self.on_peer_relation_changed)
         self.framework.observe(self.on.config_changed, self.on_config_changed)
@@ -119,13 +123,7 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.on.cve_catalog_relation_changed, self._on_cve_catalog_relation_changed)
         self.framework.observe(self.on.cve_catalog_relation_broken, self._on_cve_catalog_relation_broken)
 
-        # Ingress (nginx-routes interface)
-        require_nginx_route(
-            charm=self,
-            service_hostname=self.app.name,
-            service_name=self.app.name,
-            service_port=8080,
-        )
+        self._update_ingress_method()
 
         # Loki log-proxy relation
         self.log_proxy = LogProxyConsumer(
@@ -166,6 +164,7 @@ class LivepatchCharm(CharmBase):
 
     def on_config_changed(self, event):
         """On config changed hook, which runs first."""
+        self._update_ingress_method()
         self._update_workload_container_config(event)
 
     def on_start(self, event):
@@ -266,6 +265,41 @@ class LivepatchCharm(CharmBase):
         raw_version = charm_file.read_text(encoding="utf-8")
         version = raw_version.strip()
         self.unit.set_workload_version(version)
+
+    def _update_ingress_method(self):
+        """Update the ingress method based on the config."""
+        ingress_method = self.config.get("ingress-method")
+
+        # Keep backwards compatibility: default to nginx-route when not configured.
+        # nginx-route is legacy; gateway-route is preferred for new deployments.
+        # This operation is idempotent, so it will not cause issues if called
+        # multiple times during the charm lifecycle, such as on config changes
+        # or leader election.
+        if ingress_method == "nginx-route":
+            LOGGER.info("Ingress method specified as nginx-route")
+
+            if not self._configured_ingress or self._configured_ingress != "nginx-route":
+                self.ingress = require_nginx_route(
+                charm=self,
+                service_hostname=self.app.name,
+                service_name=self.app.name,
+                service_port=SERVER_PORT,
+                )
+                self._configured_ingress = "nginx-route"
+
+        elif ingress_method == "gateway-route":
+            LOGGER.info("Ingress method specified as gateway-route")
+            if not self._configured_ingress or self._configured_ingress != "gateway-route":
+                self.ingress = GatewayRouteRequirer(
+                charm=self,
+                relation_name="gateway-route",
+                port=SERVER_PORT,
+                )
+                self._configured_ingress = "gateway-route"
+        else:
+            error_msg = f"Invalid ingress method specified: {ingress_method}"
+            LOGGER.error(error_msg)
+            self.unit.status = BlockedStatus(error_msg)
 
     def _update_workload_container_config(self, event: Optional[HookEvent]):
         """

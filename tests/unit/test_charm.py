@@ -1369,7 +1369,7 @@ settings:
         self._assert_environment_contains(
             {
                 "LP_CVE_LOOKUP_ENABLED": False,  # Should not get enabled automatically.
-                "LP_CVE_SYNC_ENABLED": True,
+                "LP_CVE_SYNC_ENABLED": False,  # Should not get enabled automatically.
                 "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                 "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
                 "LP_CVE_SYNC_TIMEOUT": "5m",  # Default config value.
@@ -1378,7 +1378,7 @@ settings:
 
         self._assert_environment_contains(
             {
-                "LP_LSN_SYNC_ENABLED": True,
+                "LP_LSN_SYNC_ENABLED": False,  # Should not get enabled automatically.
                 "LP_LSN_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                 "LP_LSN_SYNC_INTERVAL": "1h",  # Default config value.
                 "LP_LSN_SYNC_TIMEOUT": "5m",  # Default config value.
@@ -1415,7 +1415,7 @@ settings:
             self._assert_environment_contains(
                 {
                     "LP_CVE_LOOKUP_ENABLED": False,  # Should not get enabled automatically.
-                    "LP_CVE_SYNC_ENABLED": True,
+                    "LP_CVE_SYNC_ENABLED": False,  # Should not get enabled automatically.
                     "LP_CVE_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
                     "LP_CVE_SYNC_INTERVAL": "1h",  # Default config value.
                     "LP_CVE_SYNC_TIMEOUT": "5m",  # Default config value.
@@ -1423,13 +1423,20 @@ settings:
             )
 
             self._assert_environment_contains(
-            {
-                "LP_LSN_SYNC_ENABLED": True,
-                "LP_LSN_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
-                "LP_LSN_SYNC_INTERVAL": "1h",  # Default config value.
-                "LP_LSN_SYNC_TIMEOUT": "5m",  # Default config value.
-            }
-        )
+                {
+                    "LP_LSN_SYNC_ENABLED": False,  # Should not get enabled automatically.
+                    "LP_LSN_SYNC_SOURCE_URL": "scheme://some.host.name:9999",
+                    "LP_LSN_SYNC_INTERVAL": "1h",  # Default config value.
+                    "LP_LSN_SYNC_TIMEOUT": "5m",  # Default config value.
+                }
+            )
+
+            self.harness.update_config(
+                {
+                    "lsn-sync.enabled": True,
+                    "cve-sync.enabled": True,
+                }
+            )
 
             # Now we remove the relation.
             self.harness.remove_relation(cves_rel_id)
@@ -1437,8 +1444,10 @@ settings:
             self._assert_environment_contains(
                 {
                     "LP_CVE_LOOKUP_ENABLED": False,
-                    "LP_CVE_SYNC_ENABLED": False,
-                    "LP_LSN_SYNC_ENABLED": False,
+                    "LP_CVE_SYNC_ENABLED": True,  # Should remain enabled since it's a config option.
+                    "LP_LSN_SYNC_ENABLED": True,  # Should remain enabled since it's a config option.
+                    "LP_CVE_SYNC_SOURCE_URL": "",  # Should get cleared since relation is removed.
+                    "LP_LSN_SYNC_SOURCE_URL": "",  # Should get cleared since relation is removed
                 },
             )
 

@@ -22,7 +22,7 @@ async def test_metrics_db_relation_integration(ops_test: OpsTest):
     await ops_test.model.deploy(
         "postgresql-k8s",
         application_name="postgresql-metrics",
-        channel="16/stable", 
+        channel="16/beta", 
         trust=True,
     )
     

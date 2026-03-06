@@ -4,7 +4,7 @@
 """Additional unit tests specifically for MetricsDB functionality."""
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from ops.testing import Harness
 from src.charm import LivepatchCharm
 

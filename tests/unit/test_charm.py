@@ -1439,8 +1439,6 @@ settings:
                     "LP_CVE_LOOKUP_ENABLED": False,
                     "LP_CVE_SYNC_ENABLED": False,
                     "LP_LSN_SYNC_ENABLED": False,
-                    "LP_CVE_SYNC_SOURCE_URL": "",
-                    "LP_LSN_SYNC_SOURCE_URL": "",
                 },
             )
 

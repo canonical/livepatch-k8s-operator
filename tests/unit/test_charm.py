@@ -1429,6 +1429,170 @@ settings:
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
 
+    def test_metrics_db_event_handles_relation_created(self):
+        """Test MetricsDB relation created event is handled properly."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.update_relation_data(
+            metrics_rel_id,
+            "postgresql",
+            {
+                "endpoints": "postgres.local:5432",
+                "username": "tsuser",
+                "password": "tspass",  # nosec B105
+            },
+        )
+
+        self.harness.charm._on_metrics_db_event(
+            Mock(relation=Mock(name="metrics-db"))
+        )
+
+        expected_dsn = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
+        self.assertEqual(self.harness.charm._state.dsn_metrics, expected_dsn)
+
+    def test_metrics_db_environment_variables_set_when_enabled(self):
+        """Test MetricsDB environment variables are set when relation exists."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql") 
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.charm._state.dsn_metrics = "postgresql://user:pass@host:5432/db"
+
+        self.harness.update_config({
+            "timescale.connection-pool-max": 20,
+            "timescale.connection-lifetime-max": "30m", 
+            "timescale.work_mem": 32,
+        })
+
+        self.harness.charm.on.config_changed.emit()
+
+        self._assert_environment_contains({
+            "LP_TIMESCALE_DB_CONNECTION_STRING": "postgresql://user:pass@host:5432/db",
+            "LP_TIMESCALE_DB_CONNECTION_POOL_MAX": 20,
+            "LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX": "30m",
+            "LP_TIMESCALE_DB_WORK_MEM": 32,
+        })
+
+    def test_metrics_db_not_set_when_influx_enabled(self):
+        """Test MetricsDB is not configured when InfluxDB is enabled."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.update_config({
+            "influx.enabled": True,
+        })
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.charm._state.dsn_metrics = "postgresql://user:pass@host:5432/db"
+
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_POOL_MAX", environment)
+
+    def test_metrics_db_not_set_when_no_relation(self):
+        """Test MetricsDB is not configured when no relation exists."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.update_config({
+            "timescale.connection-pool-max": 20,
+        })
+
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_POOL_MAX", environment)
+
+    def test_metrics_db_event_defers_when_no_db_info(self):
+        """Test MetricsDB event is deferred when database info is not available."""
+        self.harness.set_leader(True) 
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        mock_event = Mock(relation=Mock(name="metrics-db"))
+        mock_event.defer = Mock()
+
+        self.harness.charm._on_metrics_db_event(mock_event)
+
+        mock_event.defer.assert_called_once()
+
+    def test_metrics_db_event_ignores_non_leader_units(self):
+        """Test MetricsDB event is ignored on non-leader units."""
+        self.harness.set_leader(False)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.update_relation_data(
+            metrics_rel_id,
+            "postgresql",
+            {
+                "endpoints": "postgresql://postgres.local:5432",
+                "username": "tsuser", 
+                "password": "tspass", # nosec B105
+            },
+        )
+
+        mock_event = Mock(relation=Mock(name="metrics-db"))
+
+        initial_dsn = getattr(self.harness.charm._state, 'dsn_metrics', None)
+
+        self.harness.charm._on_metrics_db_event(mock_event)
+
+        final_dsn = getattr(self.harness.charm._state, 'dsn_metrics', None)
+        self.assertEqual(initial_dsn, final_dsn)
+
+    def test_metrics_db_partial_config_handling(self):
+        """
+        Test partial MetricsDB configuration is handled correctly. 
+        The charm should use default values for missing config options and set environment variables accordingly.
+        """
+        
+        self.harness.set_leader(True)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.update_config({
+            "timescale.connection-pool-max": 15,
+            # Intentionally omit other options
+        })
+
+        self.harness.charm._state.dsn_metrics = "postgresql://user:pass@host:5432/db"
+
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        
+        self.assertIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_CONNECTION_STRING"], "postgresql://user:pass@host:5432/db")
+        self.assertIn("LP_TIMESCALE_DB_CONNECTION_POOL_MAX", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_CONNECTION_POOL_MAX"], 15)
+        
+        self.assertIn("LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX"], "10m")
+        self.assertIn("LP_TIMESCALE_DB_WORK_MEM", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_WORK_MEM"], 16)
 
     def _add_database_legacy_relation(self, dsn_string: str = "postgresql://user:pass@host:5432/livepatch-server"):
         """Helper method to add and configure a legacy database relation."""

@@ -254,15 +254,18 @@ class LivepatchCharm(CharmBase):
             )
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
-        # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
-        explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
-
         # remove empty environment values
         env_vars = {
             key: value
             for key, value in env_vars.items() 
-            if key in explicit_keys or (value != "" and value is not None)
+            if value != "" and value is not None
         }
+
+        # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
+        explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
+        # Set keys to empty string if they are not already set.
+        for key in explicit_keys:
+            env_vars.setdefault(key, "")
 
         return env_vars
 

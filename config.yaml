@@ -357,6 +357,43 @@ options:
     description: A comma separated list of domains, IP CIDRs and/or ports to block when querying fixed CVE data.
     type: string
 
+  lsn-sync.enabled:
+    default: false
+    description: |
+      Whether or not if this instance of Livepatch Server should sync LSN data.
+    type: boolean
+  lsn-sync.source-url:
+    default: ""
+    description: |
+      Address of Livepatch CVE service to sync LSN data from.
+    type: string
+  lsn-sync.interval:
+    default: "1h"
+    description: Period between automatic refreshing of LSN data.
+    type: string
+  lsn-sync.timeout:
+    default: "5m"
+    description: |
+      Timeout for the LSN sync client. The LSN sync will timeout if the CVE service
+      takes longer than the timeout defined, to send the LSN data.
+    type: string
+  lsn-sync.proxy.enabled:
+    default: false
+    description: Whether or not to proxy LSN data syncs.
+    type: boolean
+  lsn-sync.proxy.http:
+    default: ""
+    description: A comma separated list HTTP proxies to query LSN data.
+    type: string
+  lsn-sync.proxy.https:
+    default: ""
+    description: A comma separated list HTTPS proxies to query LSN data.
+    type: string
+  lsn-sync.proxy.no-proxy:
+    default: ""
+    description: A comma separated list of domains, IP CIDRs and/or ports to block when querying LSN data.
+    type: string
+
   machine-reports.database.enabled:
     default: false
     description: Whether or not to enabled machine reports writes to PostgreSQL.

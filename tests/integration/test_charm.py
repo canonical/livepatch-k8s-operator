@@ -68,10 +68,16 @@ async def test_charm_integrates_with_gateway_api(ops_test: OpsTest):
     await ops_test.model.relate(
         "self-signed-certificates:certificates", "gateway-api-integrator:certificates"
     )
+
+    await ops_test.model.relate(f"{APP_NAME}:ingress", "gateway-route-configurator:ingress")
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME, "gateway-route-configurator"],
+        timeout=600,
+        idle_period=15,
+    )
     await ops_test.model.relate(
         "gateway-api-integrator:gateway-route", "gateway-route-configurator:gateway-route"
     )
-    await ops_test.model.relate(f"{APP_NAME}:ingress", "gateway-route-configurator:ingress")
 
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME, "gateway-route-configurator", "gateway-api-integrator", "self-signed-certificates"],

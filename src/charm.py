@@ -16,7 +16,7 @@ from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
-from charms.gateway_api_integrator.v0.gateway_route import GatewayRouteRequirer
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
@@ -277,37 +277,37 @@ class LivepatchCharm(CharmBase):
         self.unit.set_workload_version(version)
 
     def _update_ingress_method(self):
-        """Update the ingress method based on the config."""
-        ingress_method = self.config.get("ingress-method")
+        """Update the ingress interface based on the config."""
+        ingress_method = self.config.get("ingress-interface")
 
-        # Keep backwards compatibility: default to nginx-route when not configured.
-        # nginx-route is legacy; gateway-route is preferred for new deployments.
+        # Keep backwards compatibility: default to legacy-nginx-route when not configured.
+        # legacy-nginx-route is legacy; ingress is preferred for new deployments.
         # This operation is idempotent, so it will not cause issues if called
         # multiple times during the charm lifecycle, such as on config changes
         # or leader election.
-        if ingress_method == "nginx-route":
-            LOGGER.info("Ingress method specified as nginx-route")
+        if ingress_method == "legacy-nginx-route":
+            LOGGER.info("Ingress interface specified as legacy-nginx-route")
 
-            if not self._configured_ingress or self._configured_ingress != "nginx-route":
+            if not self._configured_ingress or self._configured_ingress != "legacy-nginx-route":
                 self.ingress = require_nginx_route(
                 charm=self,
                 service_hostname=self.app.name,
                 service_name=self.app.name,
                 service_port=SERVER_PORT,
                 )
-                self._configured_ingress = "nginx-route"
+                self._configured_ingress = "legacy-nginx-route"
 
-        elif ingress_method == "gateway-route":
-            LOGGER.info("Ingress method specified as gateway-route")
-            if not self._configured_ingress or self._configured_ingress != "gateway-route":
-                self.ingress = GatewayRouteRequirer(
+        elif ingress_method == "ingress":
+            LOGGER.info("Ingress interface specified as ingress")
+            if not self._configured_ingress or self._configured_ingress != "ingress":
+                self.ingress = IngressPerAppRequirer(
                 charm=self,
-                relation_name="gateway-route",
+                relation_name="ingress",
                 port=SERVER_PORT,
                 )
-                self._configured_ingress = "gateway-route"
+                self._configured_ingress = "ingress"
         else:
-            error_msg = f"Invalid ingress method specified: {ingress_method}"
+            error_msg = f"Invalid ingress interface specified: {ingress_method}"
             LOGGER.error(error_msg)
             self.unit.status = BlockedStatus(error_msg)
 

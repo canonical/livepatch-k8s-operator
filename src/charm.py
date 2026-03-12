@@ -309,6 +309,8 @@ class LivepatchCharm(CharmBase):
         else:
             error_msg = f"Invalid ingress interface specified: {ingress_method}"
             LOGGER.error(error_msg)
+            self._configured_ingress = None
+            self.ingress = None
             self.unit.status = BlockedStatus(error_msg)
 
     def _update_workload_container_config(self, event: Optional[HookEvent]):

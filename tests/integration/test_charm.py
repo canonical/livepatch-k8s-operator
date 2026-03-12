@@ -53,6 +53,10 @@ async def test_charm_integrates_with_nginx_route(ops_test: OpsTest):
     await ops_test.model.relate(f"{APP_NAME}:nginx-route", "nginx-ingress-integrator:nginx-route")
     await ops_test.model.wait_for_idle(apps=[APP_NAME, "nginx-ingress-integrator"], status=ACTIVE_STATUS)
 
+    status = await ops_test.model.get_status()
+    nginx_app_status = status.applications["nginx-ingress-integrator"]
+    assert "Ingress IP(s):" in nginx_app_status, "nginx-ingress-integrator application does not have an ingress address"
+
 @pytest.mark.abort_on_fail
 async def test_charm_integrates_with_gateway_api(ops_test: OpsTest):
     """Test charm can integrate with ingress interface via Gateway API."""
@@ -74,7 +78,7 @@ async def test_charm_integrates_with_gateway_api(ops_test: OpsTest):
     await ops_test.model.relate(
         "gateway-api-integrator:gateway-route", "gateway-route-configurator:gateway-route"
     )
-    
+
     await ops_test.model.relate(f"{APP_NAME}:ingress", "gateway-route-configurator:ingress")
 
     await ops_test.model.wait_for_idle(
@@ -83,3 +87,8 @@ async def test_charm_integrates_with_gateway_api(ops_test: OpsTest):
         idle_period=30,
         timeout=1200,
     )
+
+    status = await ops_test.model.get_status()
+    nginx_app_status = status.applications["gateway-api-integrator"]
+    assert "Gateway addresses:" in nginx_app_status, "gateway-api-integrator application does not have an ingress address"
+    

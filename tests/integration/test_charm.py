@@ -46,7 +46,7 @@ async def test_charm_version_is_set(ops_test: OpsTest):
 async def test_charm_integrates_with_nginx_route(ops_test: OpsTest):
     """Test charm can integrate with nginx-route interface."""
     await ops_test.model.applications[APP_NAME].set_config({"ingress-interface": "legacy-nginx-route"})
-    await ops_test.model.deploy("nginx-ingress-integrator", channel="latest/stable")
+    await ops_test.model.deploy("nginx-ingress-integrator", channel="latest/stable", trust=True)
     await ops_test.model.relate(f"{APP_NAME}:nginx-route", "nginx-ingress-integrator:nginx-route")
     await ops_test.model.wait_for_idle(apps=[APP_NAME, "nginx-ingress-integrator"], status=ACTIVE_STATUS)
 

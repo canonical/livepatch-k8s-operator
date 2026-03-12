@@ -4,6 +4,9 @@
 
 import logging
 import pathlib
+import asyncio
+import json
+import time
 
 import pytest
 import requests
@@ -12,6 +15,61 @@ from helpers import ACTIVE_STATUS, APP_NAME, extract_version_from_metadata
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
+
+
+async def _wait_for_unit_agent_idle(ops_test: OpsTest, app: str, unit_num: int = 0, timeout: float = 300.0) -> None:
+    """Wait until a unit's agent-status is idle.
+
+    This is safe even if the workload status is Blocked/Waiting.
+    """
+    unit_name = f"{app}/{unit_num}"
+    deadline = time.monotonic() + timeout
+    last_agent_status = None
+
+    while time.monotonic() < deadline:
+        status = await ops_test.model.get_status()
+        unit = status["applications"][app]["units"][unit_name]
+        agent_status = unit.get("agent-status", {}).get("current")
+        last_agent_status = agent_status
+        if agent_status == "idle":
+            return
+        await asyncio.sleep(2)
+
+    raise TimeoutError(f"Timed out waiting for {unit_name} agent idle (last={last_agent_status!r})")
+
+
+async def _wait_for_gateway_route_requirer_app_data(
+    ops_test: OpsTest,
+    requirer_app: str = "gateway-route-configurator",
+    timeout: float = 300.0,
+) -> None:
+    """Wait until the gateway-route requirer has published the required app data."""
+    required = {"hostname", "model", "name", "port"}
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        exit_code, stdout, _ = await ops_test.juju("show-relation", "gateway-route", "--format=json")
+        if exit_code == 0 and stdout.strip():
+            try:
+                relations = json.loads(stdout)
+            except json.JSONDecodeError:
+                relations = None
+
+            if isinstance(relations, list):
+                for rel in relations:
+                    app_data = (
+                        rel.get("applications", {})
+                        .get(requirer_app, {})
+                        .get("application-data", {})
+                    )
+                    if required.issubset(app_data.keys()) and all(str(app_data[k]).strip() for k in required):
+                        return
+
+        await asyncio.sleep(2)
+
+    raise TimeoutError(
+        f"Timed out waiting for {requirer_app} gateway-route app data keys: {sorted(required)}"
+    )
 
 
 @pytest.mark.asyncio
@@ -70,14 +128,14 @@ async def test_charm_integrates_with_gateway_api(ops_test: OpsTest):
     )
 
     await ops_test.model.relate(f"{APP_NAME}:ingress", "gateway-route-configurator:ingress")
-    await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, "gateway-route-configurator"],
-        timeout=600,
-        idle_period=15,
-    )
+
+    await _wait_for_unit_agent_idle(ops_test, "gateway-route-configurator", timeout=600)
+
     await ops_test.model.relate(
         "gateway-api-integrator:gateway-route", "gateway-route-configurator:gateway-route"
     )
+
+    await _wait_for_gateway_route_requirer_app_data(ops_test, timeout=600)
 
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME, "gateway-route-configurator", "gateway-api-integrator", "self-signed-certificates"],

@@ -56,7 +56,7 @@ async def test_charm_integrates_with_gateway_api(ops_test: OpsTest):
     await ops_test.model.applications[APP_NAME].set_config({"ingress-interface": "ingress"})
 
     await ops_test.model.deploy("self-signed-certificates", channel="1/stable")
-    await ops_test.model.deploy("gateway-api-integrator", channel="latest/stable")
+    await ops_test.model.deploy("gateway-api-integrator", channel="latest/stable", trust=True)
     await ops_test.model.deploy("gateway-route-configurator", channel="latest/stable")
 
     external_hostname = "livepatch.com"

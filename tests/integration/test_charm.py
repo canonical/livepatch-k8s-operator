@@ -4,9 +4,6 @@
 
 import logging
 import pathlib
-import asyncio
-import json
-import time
 
 import pytest
 import requests
@@ -91,4 +88,3 @@ async def test_charm_integrates_with_gateway_api(ops_test: OpsTest):
     status = await ops_test.model.get_status()
     nginx_app_status = status.applications["gateway-api-integrator"]
     assert "Gateway addresses:" in nginx_app_status, "gateway-api-integrator application does not have an ingress address"
-    

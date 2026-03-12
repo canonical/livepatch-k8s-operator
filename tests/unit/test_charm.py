@@ -5,7 +5,7 @@
 import os
 import pathlib
 import unittest
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
 import yaml

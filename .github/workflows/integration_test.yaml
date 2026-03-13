@@ -6,8 +6,17 @@ on:
 
 jobs:
   integration-test:
-    name: Integration tests (MicroK8s controller)
+    name: Integration tests (MicroK8s controller, MicroK8s ${{ matrix.microk8s_channel }}, Juju ${{ matrix.juju_channel }})
     runs-on: self-hosted-linux-amd64-jammy-xlarge
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - microk8s_channel: 1.30-strict/stable
+            juju_channel: 2.9/stable
+          - microk8s_channel: 1.35-strict/stable
+            juju_channel: 3.6/stable
 
     steps:
       - name: Checkout
@@ -24,8 +33,8 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          channel: 1.35-strict/stable
-          juju-channel: 3.6/stable
+          channel: ${{ matrix.microk8s_channel }}
+          juju-channel: ${{ matrix.juju_channel }}
           provider: microk8s
           microk8s-group: snap_microk8s
           microk8s-addons: "ingress storage dns rbac registry metallb:192.168.1.100-192.168.1.100"
@@ -51,8 +60,17 @@ jobs:
         uses: canonical/charming-actions/dump-logs@main
 
   integration-test-airgapped:
-    name: Airgapped integration tests (LXD controller)
+    name: Airgapped integration tests (LXD controller, MicroK8s ${{ matrix.microk8s_channel }}, Juju ${{ matrix.juju_channel }})
     runs-on: self-hosted-linux-amd64-jammy-xlarge
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - microk8s_channel: 1.30-strict/stable
+            juju_channel: 2.9/stable
+          - microk8s_channel: 1.35-strict/stable
+            juju_channel: 3.6/stable
 
     steps:
       - name: Checkout
@@ -69,8 +87,8 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          channel: 1.35-strict/stable
-          juju-channel: 3.6/stable
+          channel: ${{ matrix.microk8s_channel }}
+          juju-channel: ${{ matrix.juju_channel }}
           provider: microk8s
           microk8s-group: snap_microk8s
           microk8s-addons: "ingress storage dns rbac registry metallb:192.168.1.100-192.168.1.100"

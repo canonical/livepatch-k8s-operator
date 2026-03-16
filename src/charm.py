@@ -268,7 +268,6 @@ class LivepatchCharm(CharmBase):
         cve_service_address = self._get_available_cve_service()
         if cve_service_address and self.unit.is_leader():
             # Note that other env vars are already set from the configuration.
-            env_vars["LP_CVE_SYNC_ENABLED"] = True
             env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
         
         # MetricsDB integration should only be used if not using InfluxDB.
@@ -291,7 +290,17 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
         # remove empty environment values
-        env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
+        env_vars = {
+            key: value
+            for key, value in env_vars.items() 
+            if value != "" and value is not None
+        }
+
+        # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
+        explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
+        # Set keys to empty string if they are not already set.
+        for key in explicit_keys:
+            env_vars.setdefault(key, "")
 
         return env_vars
 

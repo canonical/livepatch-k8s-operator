@@ -1,0 +1,205 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""Log redaction module.
+
+Provides a logging Filter and Formatter that scrub sensitive information
+(passwords, tokens, API keys, connection strings) from log records before
+they reach any handler.
+
+To activate redaction, call ``setup_log_redaction()`` once early in the
+charm's ``__init__`` method, after ``super().__init__()``.
+
+NOTE: If new sensitive config keys are added to config.yaml, add the
+corresponding ``LP_*`` env-var name to ``_SENSITIVE_ENV_VAR_PATTERN`` and
+add the canonical config key name to ``SENSITIVE_FIELD_NAMES``.
+"""
+
+import logging
+import re
+from typing import Optional
+
+_REDACTED = "***REDACTED***"
+
+# ---------------------------------------------------------------------------
+# Redaction patterns
+# ---------------------------------------------------------------------------
+
+# URIs with embedded credentials: scheme://user:password@host/...
+# Replaces everything after the scheme (userinfo + host + path).
+_URI_PATTERN = re.compile(
+    r"(?P<scheme>\w[\w+\-.]*://)"  # e.g. postgresql://
+    r"[^:@\s]+:[^@\s]+"            # user:password  (redacted)
+    r"@\S*",                        # @host/db...    (redacted)
+    re.IGNORECASE,
+)
+
+# HTTP Authorization header values: Bearer/Basic/Token <credential>
+_AUTH_HEADER_PATTERN = re.compile(
+    r"(?P<scheme>(?:Bearer|Basic|Token)\s+)"
+    r"\S+",
+    re.IGNORECASE,
+)
+
+# Generic key=value / key: value pairs where the key name implies a secret.
+# Uses \b word boundaries to avoid false positives (e.g. "token_count=5").
+_KV_PATTERN = re.compile(
+    r"(?P<key>\b(?:"
+    r"password|passwd|secret|token|"
+    r"api[_\-]?key|api[_\-]?secret|"
+    r"access[_\-]?key|private[_\-]?key|auth[_\-]?key|"
+    r"credentials"
+    r"host"
+    r")\b)"
+    r"(?P<sep>\s*[=:]\s*)"
+    r"(?P<quote>['\"]?)"
+    r"(?P<value>[^\s'\"]+)"
+    r"(?P=quote)",
+    re.IGNORECASE,
+)
+
+# Specific charm env-var assignments that carry sensitive config values.
+# Covers env vars produced by map_config_to_env_vars() and explicit sets in
+# charm.py get_env_vars().
+_SENSITIVE_ENV_VAR_PATTERN = re.compile(
+    r"(?P<varname>"
+    r"LP_CONTRACTS_PASSWORD"
+    r"|LP_PATCH_SYNC_TOKEN"
+    r"|LP_PATCH_STORAGE_S3_SECRET_KEY"
+    r"|LP_PATCH_STORAGE_S3_ACCESS_KEY"
+    r"|LP_PATCH_STORAGE_SWIFT_API_KEY"
+    r"|LP_PATCH_STORAGE_SWIFT_USERNAME"
+    r"|LP_AUTH_BASIC_USERS"
+    r"|LP_AUTH_SSO_PUBLIC_KEY"
+    r"|LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"
+    r"|LP_DATABASE_CONNECTION_STRING"
+    r")"
+    r"(?P<sep>=)"
+    r"(?P<value>\S+)",
+    re.IGNORECASE,
+)
+
+_PATTERNS = [
+    (
+        _URI_PATTERN,
+        lambda m: f"{m.group('scheme')}{_REDACTED}",
+    ),
+    (
+        _AUTH_HEADER_PATTERN,
+        lambda m: f"{m.group('scheme')}{_REDACTED}",
+    ),
+    (
+        _KV_PATTERN,
+        lambda m: (
+            f"{m.group('key')}{m.group('sep')}"
+            f"{m.group('quote')}{_REDACTED}{m.group('quote')}"
+        ),
+    ),
+    (
+        _SENSITIVE_ENV_VAR_PATTERN,
+        lambda m: f"{m.group('varname')}{m.group('sep')}{_REDACTED}",
+    ),
+]
+
+
+def _redact(text: str) -> str:
+    """Apply all redaction patterns to *text* and return the sanitised result."""
+    for pattern, replacement in _PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+# ---------------------------------------------------------------------------
+# Sensitive config field names
+# ---------------------------------------------------------------------------
+
+# The canonical config key names from config.yaml that hold sensitive values.
+# NOTE: If new sensitive config keys are added to config.yaml, add them here
+# AND add the corresponding LP_* env-var name to _SENSITIVE_ENV_VAR_PATTERN.
+SENSITIVE_FIELD_NAMES = frozenset(
+    {
+        "contracts.password",
+        "patch-sync.token",
+        "patch-storage.s3-secret-key",
+        "patch-storage.s3-access-key",
+        "patch-storage.swift-api-key",
+        "patch-storage.swift-username",
+        "auth.basic.users",
+        "auth.sso.public-key",
+        "patch-storage.postgres-connection-string",
+    }
+)
+
+# ---------------------------------------------------------------------------
+# Filter
+# ---------------------------------------------------------------------------
+
+
+class RedactingFilter(logging.Filter):
+    """Logging filter that redacts sensitive data from log records in-place.
+
+    Handles both %-style formatted records (record.msg + record.args) and
+    pre-formatted messages (e.g. f-strings). Always returns ``True`` so that
+    no records are suppressed — only their content is sanitised.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        """Sanitise *record* in-place; never suppresses the record."""
+        if record.args:
+            try:
+                record.msg = str(record.msg) % record.args
+            except (TypeError, ValueError):
+                record.msg = str(record.msg)
+            record.args = None
+        record.msg = _redact(str(record.msg))
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Formatter
+# ---------------------------------------------------------------------------
+
+
+class RedactingFormatter(logging.Formatter):
+    """Formatter that delegates to a wrapped formatter then redacts the output.
+
+    Acts as a last line of defence: catches sensitive data not intercepted by
+    the filter — for example, values embedded in exception tracebacks or
+    messages from loggers that bypass the root-logger filter chain.
+    """
+
+    def __init__(self, wrapped: Optional[logging.Formatter] = None) -> None:
+        super().__init__()
+        self._wrapped = wrapped if wrapped is not None else logging.Formatter()
+
+    def format(self, record: logging.LogRecord) -> str:
+        return _redact(self._wrapped.format(record))
+
+    def formatException(self, ei) -> str:  # noqa: N802
+        return _redact(self._wrapped.formatException(ei))
+
+    def formatStack(self, stack_info: str) -> str:  # noqa: N802
+        return _redact(self._wrapped.formatStack(stack_info))
+
+
+# ---------------------------------------------------------------------------
+# Setup helper
+# ---------------------------------------------------------------------------
+
+
+def setup_log_redaction() -> None:
+    """Attach redaction filter and formatter to the root logger.
+
+    Must be called after ops has initialised the root logger — i.e. after
+    ``super().__init__()`` inside the charm's ``__init__`` method.
+
+    Effects:
+    - ``RedactingFilter`` is added to the root logger, covering all loggers
+      in the charm and charm libraries.
+    - Each existing handler on the root logger has its formatter wrapped with
+      ``RedactingFormatter`` as a secondary safety net.
+    """
+    root = logging.getLogger()
+    root.addFilter(RedactingFilter())
+    for handler in root.handlers:
+        handler.setFormatter(RedactingFormatter(handler.formatter))

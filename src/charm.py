@@ -26,6 +26,7 @@ from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, Relati
 import utils
 from constants import LOGGER, SCHEMA_UPGRADE_CONTAINER, WORKLOAD_CONTAINER
 from legacy_constants import map_old_config_to_new_config
+from log_redactor import setup_log_redaction
 from state import State
 
 SERVER_PORT = 8080
@@ -57,6 +58,7 @@ class LivepatchCharm(CharmBase):
     def __init__(self, *args):
         """Init function."""
         super().__init__(*args)
+        setup_log_redaction()
 
         self._state = State(self.app, lambda: self.model.get_relation("livepatch"))
 
@@ -559,7 +561,7 @@ class LivepatchCharm(CharmBase):
         # compose the db connection string
         uri = f"postgresql://{user}:{password}@{ep}/{DATABASE_NAME}"
 
-        LOGGER.info(f"received database uri: {uri}")
+        LOGGER.info("received database connection for endpoint: %s", ep)
 
         # record the connection string
         self._state.dsn = uri

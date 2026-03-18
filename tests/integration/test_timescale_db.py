@@ -25,7 +25,7 @@ async def test_metrics_db_relation_integration(ops_test: OpsTest):
         channel="16/beta", 
         trust=True,
         config={
-        "plugin_timescaledb_enable": True,
+        "plugin-timescaledb-enable": True,
         }
     )
     

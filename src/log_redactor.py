@@ -124,7 +124,7 @@ class RedactingFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         """Sanitise *record* in-place; never suppresses the record."""
-        record.msg = _redact_if_str(record.msg)
+        record.msg = _redact(str(record.msg))
         if isinstance(record.args, dict):
             record.args = {k: _redact_if_str(v) for k, v in record.args.items()}
         elif record.args:

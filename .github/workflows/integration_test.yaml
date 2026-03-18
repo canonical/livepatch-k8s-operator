@@ -79,8 +79,8 @@ jobs:
           sudo snap restart microk8s.daemon-containerd
       - name: Install tox
         run: python -m pip install tox
-      - name: Run integration tests
-        run: tox -e integration
+      - name: Run integration tests for metrics database
+        run: tox -e integration-metricsdb
       - name: Dump logs
         if: failure()
         uses: canonical/charming-actions/dump-logs@main

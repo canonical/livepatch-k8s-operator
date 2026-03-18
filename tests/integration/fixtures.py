@@ -106,6 +106,18 @@ async def deploy_package(
         assert ops_test.model.applications[APP_NAME].units[0].workload_status == ACTIVE_STATUS
 
 
+async def deploy_package_if_needed(
+    ops_test: OpsTest,
+    use_current_stable: bool = False,
+):
+    """Deploy the application and its dependencies only if not already deployed."""
+    if APP_NAME in ops_test.model.applications:
+        logger.info("%s already deployed; skipping deploy", APP_NAME)
+        return
+
+    await deploy_package(ops_test, use_current_stable=use_current_stable)
+
+
 async def perform_livepatch_integrations(ops_test: OpsTest):
     """Add relations between Livepatch charm and postgresql-k8s.
 

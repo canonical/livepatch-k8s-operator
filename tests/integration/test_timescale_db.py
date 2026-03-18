@@ -24,6 +24,9 @@ async def test_metrics_db_relation_integration(ops_test: OpsTest):
         application_name="postgresql-metrics",
         channel="16/beta", 
         trust=True,
+        config={
+        "plugin_timescaledb_enable": True,
+        }
     )
     
     await ops_test.model.wait_for_idle(

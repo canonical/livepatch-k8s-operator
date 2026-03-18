@@ -561,7 +561,7 @@ class LivepatchCharm(CharmBase):
         # compose the db connection string
         uri = f"postgresql://{user}:{password}@{ep}/{DATABASE_NAME}"
 
-        LOGGER.info("received database connection for endpoint: %s", ep)
+        LOGGER.info("received database connection for database: %s", DATABASE_NAME)
 
         # record the connection string
         self._state.dsn = uri
@@ -580,9 +580,7 @@ class LivepatchCharm(CharmBase):
             LOGGER.debug("no relation data found for relation %s", db_relation_id)
             return None
 
-        LOGGER.debug("database endpoints: %s", relation_data.get("endpoints"))
         endpoint = relation_data.get("endpoints").split(",")[0]
-        LOGGER.info("database endpoint: %s", endpoint)
         return {
             "endpoint": endpoint,
             "password": relation_data.get("password"),

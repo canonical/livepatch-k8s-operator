@@ -11,8 +11,7 @@ To activate redaction, call ``setup_log_redaction()`` once early in the
 charm's ``__init__`` method, after ``super().__init__()``.
 
 NOTE: If new sensitive config keys are added to config.yaml, add the
-corresponding ``LP_*`` env-var name to ``_SENSITIVE_ENV_VAR_PATTERN`` and
-add the canonical config key name to ``SENSITIVE_FIELD_NAMES``.
+corresponding ``LP_*`` env-var name to ``_SENSITIVE_ENV_VAR_PATTERN``.
 """
 
 import logging
@@ -30,13 +29,13 @@ _REDACTED = "***REDACTED***"
 _URI_PATTERN = re.compile(
     r"(?P<scheme>\w[\w+\-.]*://)"  # e.g. postgresql://
     r"[^:@\s]+:[^@\s]+"            # user:password  (redacted)
-    r"@\S*",                        # @host/db...    (redacted)
+    r"@\S*",                       # @host/db...    (redacted)
     re.IGNORECASE,
 )
 
-# HTTP Authorization header values: Bearer/Basic/Token <credential>
+# HTTP Authorization header values: Bearer/Basic <credential>
 _AUTH_HEADER_PATTERN = re.compile(
-    r"(?P<scheme>(?:Bearer|Basic|Token)\s+)"
+    r"(?P<scheme>(?:Bearer|Basic)\s+)"
     r"\S+",
     re.IGNORECASE,
 )
@@ -48,8 +47,7 @@ _KV_PATTERN = re.compile(
     r"password|passwd|secret|token|"
     r"api[_\-]?key|api[_\-]?secret|"
     r"access[_\-]?key|private[_\-]?key|auth[_\-]?key|"
-    r"credentials"
-    r"host"
+    r"credentials|host"
     r")\b)"
     r"(?P<sep>\s*[=:]\s*)"
     r"(?P<quote>['\"]?)"
@@ -102,33 +100,16 @@ _PATTERNS = [
 ]
 
 
-def _redact(text: str) -> str:
-    """Apply all redaction patterns to *text* and return the sanitised result."""
+def _redact(msg: str) -> str:
+    """Apply all redaction patterns to *msg* and return the sanitised result."""
     for pattern, replacement in _PATTERNS:
-        text = pattern.sub(replacement, text)
-    return text
+        msg = pattern.sub(replacement, msg)
+    return msg
 
 
-# ---------------------------------------------------------------------------
-# Sensitive config field names
-# ---------------------------------------------------------------------------
-
-# The canonical config key names from config.yaml that hold sensitive values.
-# NOTE: If new sensitive config keys are added to config.yaml, add them here
-# AND add the corresponding LP_* env-var name to _SENSITIVE_ENV_VAR_PATTERN.
-SENSITIVE_FIELD_NAMES = frozenset(
-    {
-        "contracts.password",
-        "patch-sync.token",
-        "patch-storage.s3-secret-key",
-        "patch-storage.s3-access-key",
-        "patch-storage.swift-api-key",
-        "patch-storage.swift-username",
-        "auth.basic.users",
-        "auth.sso.public-key",
-        "patch-storage.postgres-connection-string",
-    }
-)
+def _redact_if_str(value: object) -> object:
+    """Redact *value* if it is a string; return it unchanged otherwise."""
+    return _redact(value) if isinstance(value, str) else value
 
 # ---------------------------------------------------------------------------
 # Filter
@@ -138,20 +119,16 @@ SENSITIVE_FIELD_NAMES = frozenset(
 class RedactingFilter(logging.Filter):
     """Logging filter that redacts sensitive data from log records in-place.
 
-    Handles both %-style formatted records (record.msg + record.args) and
-    pre-formatted messages (e.g. f-strings). Always returns ``True`` so that
-    no records are suppressed — only their content is sanitised.
+    Handles both pre formatted log messages (record.msg) and structured log arguments.
     """
 
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+    def filter(self, record: logging.LogRecord) -> bool:
         """Sanitise *record* in-place; never suppresses the record."""
-        if record.args:
-            try:
-                record.msg = str(record.msg) % record.args
-            except (TypeError, ValueError):
-                record.msg = str(record.msg)
-            record.args = None
         record.msg = _redact(str(record.msg))
+        if isinstance(record.args, dict):
+            record.args = {k: _redact_if_str(v) for k, v in record.args.items()}
+        elif record.args:
+            record.args = tuple(_redact_if_str(arg) for arg in record.args)
         return True
 
 
@@ -194,12 +171,9 @@ def setup_log_redaction() -> None:
     ``super().__init__()`` inside the charm's ``__init__`` method.
 
     Effects:
-    - ``RedactingFilter`` is added to the root logger, covering all loggers
-      in the charm and charm libraries.
     - Each existing handler on the root logger has its formatter wrapped with
       ``RedactingFormatter`` as a secondary safety net.
     """
     root = logging.getLogger()
-    root.addFilter(RedactingFilter())
     for handler in root.handlers:
         handler.setFormatter(RedactingFormatter(handler.formatter))

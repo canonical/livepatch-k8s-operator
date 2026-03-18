@@ -5,8 +5,10 @@
 """Grafana constants module."""
 
 import logging
+from log_redactor import RedactingFilter
 
 LOGGER = logging.getLogger(__name__)
+LOGGER.addFilter(RedactingFilter())
 WORKLOAD_CONTAINER = "livepatch"
 SCHEMA_UPGRADE_CONTAINER = "livepatch-schema-upgrade"
 

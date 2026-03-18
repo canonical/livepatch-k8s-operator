@@ -54,11 +54,11 @@ options:
       Livepatch-server as this will result in a redirect loop.
     type: boolean
 
-  ingress-method:
-    default: "nginx-route"
+  ingress-interface:
+    default: "legacy-nginx-route"
     description: |
-      Select the ingress integration. Defaults to "nginx-route" for
-      backward compatibility. Use "gateway-route" for new deployments.
+      Select the ingress integration. Defaults to "legacy-nginx-route" for
+      backward compatibility. Use "ingress" for new deployments.
     type: string
 
   auth.basic.enabled:

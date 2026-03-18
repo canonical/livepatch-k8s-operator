@@ -47,7 +47,7 @@ _KV_PATTERN = re.compile(
     r"password|passwd|secret|token|"
     r"api[_\-]?key|api[_\-]?secret|"
     r"access[_\-]?key|private[_\-]?key|auth[_\-]?key|"
-    r"credentials|host"
+    r"credentials|host|user|username"
     r")\b)"
     r"(?P<sep>\s*[=:]\s*)"
     r"(?P<quote>['\"]?)"
@@ -165,7 +165,7 @@ class RedactingFormatter(logging.Formatter):
 
 
 def setup_log_redaction() -> None:
-    """Attach redaction filter and formatter to the root logger.
+    """Attach redaction formatter to the root logger.
 
     Must be called after ops has initialised the root logger — i.e. after
     ``super().__init__()`` inside the charm's ``__init__`` method.

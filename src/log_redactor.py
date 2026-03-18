@@ -124,7 +124,7 @@ class RedactingFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         """Sanitise *record* in-place; never suppresses the record."""
-        record.msg = _redact(str(record.msg))
+        record.msg = _redact_if_str(record.msg)
         if isinstance(record.args, dict):
             record.args = {k: _redact_if_str(v) for k, v in record.args.items()}
         elif record.args:
@@ -152,10 +152,10 @@ class RedactingFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         return _redact(self._wrapped.format(record))
 
-    def formatException(self, ei) -> str:  # noqa: N802
+    def formatException(self, ei) -> str:
         return _redact(self._wrapped.formatException(ei))
 
-    def formatStack(self, stack_info: str) -> str:  # noqa: N802
+    def formatStack(self, stack_info: str) -> str:
         return _redact(self._wrapped.formatStack(stack_info))
 
 
@@ -172,7 +172,7 @@ def setup_log_redaction() -> None:
 
     Effects:
     - Each existing handler on the root logger has its formatter wrapped with
-      ``RedactingFormatter`` as a secondary safety net.
+      ``RedactingFormatter`` as a safety net.
     """
     root = logging.getLogger()
     for handler in root.handlers:

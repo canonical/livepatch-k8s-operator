@@ -137,6 +137,10 @@ class LivepatchCharm(CharmBase):
             self.on.metrics_db_relation_changed,
             self._on_metrics_db_event,
         )
+        self.framework.observe(
+            self.on.metrics_db_relation_broken,
+            self._on_metrics_db_relation_broken,
+        )
 
         # Air-gapped pro/contracts
         self.framework.observe(
@@ -655,6 +659,14 @@ class LivepatchCharm(CharmBase):
         self._state.dsn_metrics = uri
 
         self._update_workload_container_config(event)
+
+    def _on_metrics_db_relation_broken(self, event: RelationEvent) -> None:
+        """Handle metrics-db relation broken event."""
+        LOGGER.info("(metrics-db) RELATION_BROKEN event fired.")
+        if self._state.is_ready():
+            del self._state.dsn_metrics
+        self._update_workload_container_config(event)
+
     def _on_database_relation_broken(self, event: RelationEvent) -> None:
         """Handle database relation broken event."""
         LOGGER.info("(postgresql) RELATION_BROKEN event fired.")

@@ -70,7 +70,7 @@ async def deploy_package(
             base=jammy,
         )
 
-    asyncio.gather(
+    await asyncio.gather(
         deployed_application,
         ops_test.model.deploy(
             POSTGRESQL_NAME,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
-
+# pylint: disable=too-many-lines
 # Learn more at: https://juju.is/docs/sdk
 
 """Livepatch k8s charm."""

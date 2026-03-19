@@ -16,8 +16,8 @@ from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
@@ -257,11 +257,7 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
         # remove empty environment values
-        env_vars = {
-            key: value
-            for key, value in env_vars.items() 
-            if value != "" and value is not None
-        }
+        env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
         # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
         explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
@@ -292,10 +288,10 @@ class LivepatchCharm(CharmBase):
 
             if not self._configured_ingress or self._configured_ingress != "legacy-nginx-route":
                 self.ingress = require_nginx_route(
-                charm=self,
-                service_hostname=self.app.name,
-                service_name=self.app.name,
-                service_port=SERVER_PORT,
+                    charm=self,
+                    service_hostname=self.app.name,
+                    service_name=self.app.name,
+                    service_port=SERVER_PORT,
                 )
                 self._configured_ingress = "legacy-nginx-route"
 
@@ -303,9 +299,9 @@ class LivepatchCharm(CharmBase):
             LOGGER.info("Ingress interface specified as ingress")
             if not self._configured_ingress or self._configured_ingress != "ingress":
                 self.ingress = IngressPerAppRequirer(
-                charm=self,
-                relation_name="ingress",
-                port=SERVER_PORT,
+                    charm=self,
+                    relation_name="ingress",
+                    port=SERVER_PORT,
                 )
                 self._configured_ingress = "ingress"
         else:

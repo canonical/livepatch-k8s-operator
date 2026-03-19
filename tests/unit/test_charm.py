@@ -9,12 +9,13 @@ from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
 import yaml
+from charms.nginx_ingress_integrator.v0.nginx_route import NginxRouteRequirer
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
-from charms.nginx_ingress_integrator.v0.nginx_route import NginxRouteRequirer
+
 from log_redactor import _REDACTED
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT, LivepatchCharm
 from src.state import State
 
@@ -1457,7 +1458,6 @@ settings:
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
 
-
     def _add_database_legacy_relation(self, dsn_string: str = "postgresql://user:pass@host:5432/livepatch-server"):
         """Helper method to add and configure a legacy database relation."""
         db_rel_id = self.harness.add_relation("database-legacy", "postgresql")
@@ -1509,7 +1509,6 @@ settings:
         # Assert: Status should be BlockedStatus
         self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
         self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
-
 
     def _add_database_relation(self):
         """Helper method to add and configure a database relation."""
@@ -1632,9 +1631,7 @@ settings:
         legacy_db_rel_id = self._add_database_legacy_relation(dsn_string)
 
         # Verify DSN is set
-        self.assertEqual(
-            self.harness.charm._state.dsn, dsn_string
-        )
+        self.assertEqual(self.harness.charm._state.dsn, dsn_string)
 
         # Start the service
         container = self.harness.model.unit.get_container("livepatch")
@@ -1661,9 +1658,7 @@ settings:
         self._add_database_legacy_relation(dsn_string=new_dsn_string)
 
         # Verify DSN is updated with new connection details
-        self.assertEqual(
-            self.harness.charm._state.dsn, new_dsn_string
-        )
+        self.assertEqual(self.harness.charm._state.dsn, new_dsn_string)
 
         # Trigger pebble ready again to start the service with new relation
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
@@ -1673,9 +1668,7 @@ settings:
         # Assert 2: Service should be running again with new DSN
         service = container.get_service(LIVEPATCH_SERVICE_NAME)
         self.assertTrue(service.is_running())
-        self.assertEqual(
-            self.harness.charm._state.dsn, new_dsn_string
-        )
+        self.assertEqual(self.harness.charm._state.dsn, new_dsn_string)
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
 
@@ -1796,7 +1789,7 @@ class TestIngressInterface(unittest.TestCase):
 
         require_nginx_route.assert_not_called()
         self.assertIsInstance(harness.charm.ingress, IngressPerAppRequirer)
-    
+
     def test_ingress_use_nginx_route_after_ingress(self):
         """Assert that switching from 'ingress' to legacy nginx configures nginx route."""
         with patch("src.charm.require_nginx_route") as require_nginx_route:
@@ -1812,7 +1805,7 @@ class TestIngressInterface(unittest.TestCase):
             charm=harness.charm,
             service_hostname=harness.charm.app.name,
             service_name=harness.charm.app.name,
-            service_port=SERVER_PORT,   
+            service_port=SERVER_PORT,
         )
 
     def test_ingress_use_ingress_after_nginx_route(self):

@@ -28,15 +28,14 @@ _REDACTED = "***REDACTED***"
 # Replaces everything after the scheme (userinfo + host + path).
 _URI_PATTERN = re.compile(
     r"(?P<scheme>\w[\w+\-.]*://)"  # e.g. postgresql://
-    r"[^:@\s]+:[^@\s]+"            # user:password  (redacted)
-    r"@\S*",                       # @host/db...    (redacted)
+    r"[^:@\s]+:[^@\s]+"  # user:password  (redacted)
+    r"@\S*",  # @host/db...    (redacted)
     re.IGNORECASE,
 )
 
 # HTTP Authorization header values: Bearer/Basic <credential>
 _AUTH_HEADER_PATTERN = re.compile(
-    r"(?P<scheme>(?:Bearer|Basic)\s+)"
-    r"\S+",
+    r"(?P<scheme>(?:Bearer|Basic)\s+)\S+",
     re.IGNORECASE,
 )
 
@@ -88,10 +87,7 @@ _PATTERNS = [
     ),
     (
         _KV_PATTERN,
-        lambda m: (
-            f"{m.group('key')}{m.group('sep')}"
-            f"{m.group('quote')}{_REDACTED}{m.group('quote')}"
-        ),
+        lambda m: (f"{m.group('key')}{m.group('sep')}" f"{m.group('quote')}{_REDACTED}{m.group('quote')}"),
     ),
     (
         _SENSITIVE_ENV_VAR_PATTERN,
@@ -110,6 +106,7 @@ def _redact(msg: str) -> str:
 def _redact_if_str(value: object) -> object:
     """Redact *value* if it is a string; return it unchanged otherwise."""
     return _redact(value) if isinstance(value, str) else value
+
 
 # ---------------------------------------------------------------------------
 # Filter
@@ -146,16 +143,20 @@ class RedactingFormatter(logging.Formatter):
     """
 
     def __init__(self, wrapped: Optional[logging.Formatter] = None) -> None:
+        """Init function. If *wrapped* is None, uses a default logging.Formatter."""
         super().__init__()
         self._wrapped = wrapped if wrapped is not None else logging.Formatter()
 
     def format(self, record: logging.LogRecord) -> str:
+        """Override format to redact the formatted log message."""
         return _redact(self._wrapped.format(record))
 
-    def formatException(self, ei) -> str:
+    def formatException(self, ei) -> str:  # noqa: N802
+        """Override formatException to redact the formatted exception."""
         return _redact(self._wrapped.formatException(ei))
 
-    def formatStack(self, stack_info: str) -> str:
+    def formatStack(self, stack_info: str) -> str:  # noqa: N802
+        """Override formatStack to redact the formatted stack info."""
         return _redact(self._wrapped.formatStack(stack_info))
 
 

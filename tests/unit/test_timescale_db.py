@@ -5,7 +5,9 @@
 
 import unittest
 from unittest.mock import patch
+
 from ops.testing import Harness
+
 from src.charm import LivepatchCharm
 
 
@@ -27,15 +29,16 @@ class TestMetricsDBFunctionality(unittest.TestCase):
             metrics_rel_id: {
                 "endpoints": "postgres.example.com:5432,postgres2.example.com:5432",
                 "username": "metrics_user",
-                "password": "metrics_pass", # nosec B105
+                "password": "metrics_pass",  # nosec B105
             }
         }
 
-        with patch.object(self.harness.charm.metrics_db, 'is_resource_created', return_value=True), \
-             patch.object(self.harness.charm.metrics_db, 'fetch_relation_data', return_value=mock_relation_data):
-            
+        with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=True), patch.object(
+            self.harness.charm.metrics_db, "fetch_relation_data", return_value=mock_relation_data
+        ):
+
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
-            
+
             self.assertIsNotNone(db_info)
             self.assertEqual(db_info["endpoint"], "postgres.example.com:5432")
             self.assertEqual(db_info["user"], "metrics_user")
@@ -45,7 +48,7 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         """Test _get_db_info returns None when database resource not created."""
         self.harness.add_relation("metrics-db", "postgresql")
 
-        with patch.object(self.harness.charm.metrics_db, 'is_resource_created', return_value=False):
+        with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=False):
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
             self.assertIsNone(db_info)
 
@@ -54,8 +57,9 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
         self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
 
-        with patch.object(self.harness.charm.metrics_db, 'is_resource_created', return_value=True), \
-             patch.object(self.harness.charm.metrics_db, 'fetch_relation_data', return_value={}):
-            
+        with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=True), patch.object(
+            self.harness.charm.metrics_db, "fetch_relation_data", return_value={}
+        ):
+
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
             self.assertIsNone(db_info)

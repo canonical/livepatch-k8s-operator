@@ -52,7 +52,7 @@ jobs:
         
   integration-test-metrics-db:
     name: TimescaleDB Integration tests (MicroK8s controller)
-    runs-on: [self-hosted, linux, X64, xlarge, jammy]
+    runs-on: self-hosted-linux-amd64-jammy-xlarge
     steps:
       - name: Checkout
         uses: actions/checkout@v4

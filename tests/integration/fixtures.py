@@ -134,4 +134,3 @@ def get_charm_resources():
         "livepatch-server-image": oci_image("./metadata.yaml", "livepatch-server-image"),
         "livepatch-schema-upgrade-tool-image": oci_image("./metadata.yaml", "livepatch-schema-upgrade-tool-image"),
     }
-

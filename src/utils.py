@@ -12,7 +12,6 @@ import typing as t
 
 import requests
 
-
 DEFAULT_CONTRACTS_URL = "https://contracts.canonical.com"
 RESOURCE_NAME = "livepatch-onprem"
 

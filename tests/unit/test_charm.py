@@ -9,11 +9,12 @@ from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
 import yaml
+from charms.nginx_ingress_integrator.v0.nginx_route import NginxRouteRequirer
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
-from charms.nginx_ingress_integrator.v0.nginx_route import NginxRouteRequirer
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
+
 from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT, LivepatchCharm
 from src.state import State
 
@@ -257,8 +258,9 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             ex.exception.message,
-            "schema migration failed: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
+            "schema migration failed for primary database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
+
 
     def test_on_config_changed__failure__cannot_connect_to_schema_upgrade_container(self):
         """
@@ -1456,6 +1458,178 @@ settings:
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
 
+    def test_metrics_db_event_handles_relation_created(self):
+        """Test MetricsDB relation created event is handled properly."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.update_relation_data(
+            metrics_rel_id,
+            "postgresql",
+            {
+                "endpoints": "postgres.local:5432",
+                "username": "tsuser",
+                "password": "tspass",  # nosec B105
+            },
+        )
+
+        self.harness.charm._on_metrics_db_event(Mock(relation=Mock(name="metrics-db")))
+
+        expected_dsn = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
+        self.assertEqual(self.harness.charm._state.dsn_metrics, expected_dsn)
+
+    def test_metrics_db_environment_variables_set_when_enabled(self):
+        """Test MetricsDB environment variables are set when relation exists."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.charm._state.dsn_metrics = "postgresql://user:pass@host:5432/db"
+
+        self.harness.update_config(
+            {
+                "timescale.connection-pool-max": 20,
+                "timescale.connection-lifetime-max": "30m",
+                "timescale.work_mem": 32,
+            }
+        )
+
+        self.harness.charm.on.config_changed.emit()
+
+        self._assert_environment_contains(
+            {
+                "LP_TIMESCALE_DB_CONNECTION_STRING": "postgresql://user:pass@host:5432/db",
+                "LP_TIMESCALE_DB_CONNECTION_POOL_MAX": 20,
+                "LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX": "30m",
+                "LP_TIMESCALE_DB_WORK_MEM": 32,
+            }
+        )
+
+    def test_metrics_db_not_set_when_influx_enabled(self):
+        """Test MetricsDB is not configured when InfluxDB is enabled."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.update_config(
+            {
+                "influx.enabled": True,
+            }
+        )
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.charm._state.dsn_metrics = "postgresql://user:pass@host:5432/db"
+
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_POOL_MAX", environment)
+
+    def test_metrics_db_not_set_when_no_relation(self):
+        """Test MetricsDB is not configured when no relation exists."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.update_config(
+            {
+                "timescale.connection-pool-max": 20,
+            }
+        )
+
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_POOL_MAX", environment)
+
+    def test_metrics_db_event_defers_when_no_db_info(self):
+        """Test MetricsDB event is deferred when database info is not available."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        mock_event = Mock(relation=Mock(name="metrics-db"))
+        mock_event.defer = Mock()
+
+        self.harness.charm._on_metrics_db_event(mock_event)
+
+        mock_event.defer.assert_called_once()
+
+    def test_metrics_db_event_ignores_non_leader_units(self):
+        """Test MetricsDB event is ignored on non-leader units."""
+        self.harness.set_leader(False)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.update_relation_data(
+            metrics_rel_id,
+            "postgresql",
+            {
+                "endpoints": "postgresql://postgres.local:5432",
+                "username": "tsuser",
+                "password": "tspass",  # nosec B105
+            },
+        )
+
+        mock_event = Mock(relation=Mock(name="metrics-db"))
+
+        initial_dsn = getattr(self.harness.charm._state, "dsn_metrics", None)
+
+        self.harness.charm._on_metrics_db_event(mock_event)
+
+        final_dsn = getattr(self.harness.charm._state, "dsn_metrics", None)
+        self.assertEqual(initial_dsn, final_dsn)
+
+    def test_metrics_db_partial_config_handling(self):
+        """
+        Test partial MetricsDB configuration is handled correctly.
+        The charm should use default values for missing config options and set environment variables accordingly.
+        """
+
+        self.harness.set_leader(True)
+        self.start_container()
+
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.update_config(
+            {
+                "timescale.connection-pool-max": 15,
+                # Intentionally omit other options
+            }
+        )
+
+        self.harness.charm._state.dsn_metrics = "postgresql://user:pass@host:5432/db"
+
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+
+        self.assertIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_CONNECTION_STRING"], "postgresql://user:pass@host:5432/db")
+        self.assertIn("LP_TIMESCALE_DB_CONNECTION_POOL_MAX", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_CONNECTION_POOL_MAX"], 15)
+
+        self.assertIn("LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX"], "10m")
+        self.assertIn("LP_TIMESCALE_DB_WORK_MEM", environment)
+        self.assertEqual(environment["LP_TIMESCALE_DB_WORK_MEM"], 16)
 
     def _add_database_legacy_relation(self, dsn_string: str = "postgresql://user:pass@host:5432/livepatch-server"):
         """Helper method to add and configure a legacy database relation."""
@@ -1508,7 +1682,6 @@ settings:
         # Assert: Status should be BlockedStatus
         self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
         self.assertEqual(self.harness.charm.unit.status.message, "Database connection removed")
-
 
     def _add_database_relation(self):
         """Helper method to add and configure a database relation."""
@@ -1631,9 +1804,7 @@ settings:
         legacy_db_rel_id = self._add_database_legacy_relation(dsn_string)
 
         # Verify DSN is set
-        self.assertEqual(
-            self.harness.charm._state.dsn, dsn_string
-        )
+        self.assertEqual(self.harness.charm._state.dsn, dsn_string)
 
         # Start the service
         container = self.harness.model.unit.get_container("livepatch")
@@ -1660,9 +1831,7 @@ settings:
         self._add_database_legacy_relation(dsn_string=new_dsn_string)
 
         # Verify DSN is updated with new connection details
-        self.assertEqual(
-            self.harness.charm._state.dsn, new_dsn_string
-        )
+        self.assertEqual(self.harness.charm._state.dsn, new_dsn_string)
 
         # Trigger pebble ready again to start the service with new relation
         with patch("src.charm.LivepatchCharm.migration_is_required") as migration:
@@ -1672,9 +1841,7 @@ settings:
         # Assert 2: Service should be running again with new DSN
         service = container.get_service(LIVEPATCH_SERVICE_NAME)
         self.assertTrue(service.is_running())
-        self.assertEqual(
-            self.harness.charm._state.dsn, new_dsn_string
-        )
+        self.assertEqual(self.harness.charm._state.dsn, new_dsn_string)
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
 
@@ -1711,7 +1878,7 @@ class TestIngressInterface(unittest.TestCase):
 
         require_nginx_route.assert_not_called()
         self.assertIsInstance(harness.charm.ingress, IngressPerAppRequirer)
-    
+
     def test_ingress_use_nginx_route_after_ingress(self):
         """Assert that switching from 'ingress' to legacy nginx configures nginx route."""
         with patch("src.charm.require_nginx_route") as require_nginx_route:
@@ -1727,7 +1894,7 @@ class TestIngressInterface(unittest.TestCase):
             charm=harness.charm,
             service_hostname=harness.charm.app.name,
             service_name=harness.charm.app.name,
-            service_port=SERVER_PORT,   
+            service_port=SERVER_PORT,
         )
 
     def test_ingress_use_ingress_after_nginx_route(self):

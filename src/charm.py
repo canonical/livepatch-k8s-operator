@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
-
+# pylint: disable=too-many-lines
 # Learn more at: https://juju.is/docs/sdk
 
 """Livepatch k8s charm."""
+
 import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
@@ -16,8 +17,8 @@ from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
@@ -30,6 +31,7 @@ from state import State
 
 SERVER_PORT = 8080
 DATABASE_NAME = "livepatch-server"
+METRICS_DB_NAME = "livepatch-metrics-db"
 LOG_FILE = "/var/log/livepatch"
 LOGROTATE_CONFIG_PATH = "/etc/logrotate.d/livepatch"
 LIVEPATCH_SERVICE_NAME = "livepatch"
@@ -38,6 +40,7 @@ DATABASE_RELATION = "database"
 DATABASE_RELATION_LEGACY = "database-legacy"
 PRO_AIRGAPPED_SERVER_RELATION = "pro-airgapped-server"
 CVE_CATALOG_RELATION = "cve-catalog"
+METRICS_DB_RELATION = "metrics-db"
 
 REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
@@ -98,6 +101,7 @@ class LivepatchCharm(CharmBase):
             database_name=DATABASE_NAME,
         )
         self.framework.observe(self.database.on.database_created, self._on_database_event)
+
         self.framework.observe(
             self.database.on.endpoints_changed,
             self._on_database_event,
@@ -106,9 +110,31 @@ class LivepatchCharm(CharmBase):
             self.on.database_relation_changed,
             self._on_database_event,
         )
+
         self.framework.observe(
             self.on.database_relation_broken,
             self._on_database_relation_broken,
+        )
+
+        # MetricsDB
+        self.metrics_db = DatabaseRequires(
+            self,
+            relation_name=METRICS_DB_RELATION,
+            database_name=METRICS_DB_NAME,
+        )
+        self.framework.observe(self.metrics_db.on.database_created, self._on_metrics_db_event)
+
+        self.framework.observe(
+            self.metrics_db.on.endpoints_changed,
+            self._on_metrics_db_event,
+        )
+        self.framework.observe(
+            self.on.metrics_db_relation_changed,
+            self._on_metrics_db_event,
+        )
+        self.framework.observe(
+            self.on.metrics_db_relation_broken,
+            self._on_metrics_db_relation_broken,
         )
 
         # Air-gapped pro/contracts
@@ -193,9 +219,23 @@ class LivepatchCharm(CharmBase):
         """On stop hook."""
         self._stop_service()
 
+    def _get_schema_upgrade_targets(self) -> Dict[str, str]:
+        """Return database targets that require schema checks/upgrades."""
+        targets: Dict[str, str] = {}
+
+        if self._state.dsn:
+            targets["primary"] = self._state.dsn
+
+        dsn_metrics = getattr(self._state, "dsn_metrics", None)
+        if not self.config.get("influx.enabled") and self.metrics_db.relations and dsn_metrics:
+            targets["timescale"] = dsn_metrics
+
+        return targets
+
     def handle_schema_upgrade(self):
         """Check if a schema upgrade is required, and perform it."""
-        dsn = self._state.dsn
+        targets = self._get_schema_upgrade_targets()
+        dsn = targets.get("primary")
         if not dsn:
             LOGGER.info("waiting for PG connection string")
             self.unit.status = BlockedStatus("Waiting for postgres relation to be established.")
@@ -207,14 +247,15 @@ class LivepatchCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect - schema container.")
             raise DeferError
 
-        upgrade_required = False
-        try:
-            upgrade_required = self.migration_is_required(schema_container, dsn)
-        except Exception as e:
-            LOGGER.error(f"Failed to determine if schema upgrade required: {e}")
+        for db_name, conn_str in targets.items():
+            upgrade_required = False
+            try:
+                upgrade_required = self.migration_is_required(schema_container, conn_str)
+            except Exception as e:
+                LOGGER.error(f"Failed to determine if schema upgrade required for {db_name}: {e}")
 
-        if upgrade_required:
-            self.schema_upgrade(schema_container, dsn)
+            if upgrade_required:
+                self.schema_upgrade(schema_container, conn_str)
 
     def get_env_vars(self) -> dict:
         """Map config to env vars and return a processed dict."""
@@ -244,6 +285,15 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
             env_vars["LP_LSN_SYNC_SOURCE_URL"] = cve_service_address
 
+        # MetricsDB integration should only be used if not using InfluxDB.
+        # Using influx for kpi monitoring is deprecated and will be removed soon.
+        dsn_metrics = getattr(self._state, "dsn_metrics", None)
+        if not self.config.get("influx.enabled") and self.metrics_db.relations and dsn_metrics:
+            env_vars["LP_TIMESCALE_DB_CONNECTION_STRING"] = dsn_metrics
+            env_vars["LP_TIMESCALE_DB_CONNECTION_POOL_MAX"] = self.config.get("timescale.connection-pool-max")
+            env_vars["LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX"] = self.config.get("timescale.connection-lifetime-max")
+            env_vars["LP_TIMESCALE_DB_WORK_MEM"] = self.config.get("timescale.work_mem")
+
         # Some extra config and checks
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn
         env_vars["LP_SERVER_SERVER_ADDRESS"] = f":{SERVER_PORT}"
@@ -255,11 +305,7 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
         # remove empty environment values
-        env_vars = {
-            key: value
-            for key, value in env_vars.items() 
-            if value != "" and value is not None
-        }
+        env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
         # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
         explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
@@ -290,10 +336,10 @@ class LivepatchCharm(CharmBase):
 
             if not self._configured_ingress or self._configured_ingress != "legacy-nginx-route":
                 self.ingress = require_nginx_route(
-                charm=self,
-                service_hostname=self.app.name,
-                service_name=self.app.name,
-                service_port=SERVER_PORT,
+                    charm=self,
+                    service_hostname=self.app.name,
+                    service_name=self.app.name,
+                    service_port=SERVER_PORT,
                 )
                 self._configured_ingress = "legacy-nginx-route"
 
@@ -301,9 +347,9 @@ class LivepatchCharm(CharmBase):
             LOGGER.info("Ingress interface specified as ingress")
             if not self._configured_ingress or self._configured_ingress != "ingress":
                 self.ingress = IngressPerAppRequirer(
-                charm=self,
-                relation_name="ingress",
-                port=SERVER_PORT,
+                    charm=self,
+                    relation_name="ingress",
+                    port=SERVER_PORT,
                 )
                 self._configured_ingress = "ingress"
         else:
@@ -548,7 +594,7 @@ class LivepatchCharm(CharmBase):
                 f"`{DATABASE_RELATION_LEGACY}` is already activated."
             )
 
-        dbconn = self._get_db_info()
+        dbconn = self._get_db_info(self.database)
         if dbconn is None:
             LOGGER.info("no database connection info found, deferring event")
             event.defer()
@@ -568,14 +614,14 @@ class LivepatchCharm(CharmBase):
 
         self._update_workload_container_config(event)
 
-    def _get_db_info(self) -> Optional[Dict]:
-        """Get database connection info by reading relation data."""
-        if len(self.database.relations) == 0 or not self.database.is_resource_created():
+    def _get_db_info(self, db_relation) -> Optional[Dict]:
+        """Get database connection info by reading relation data from a given relation object."""
+        if len(db_relation.relations) == 0 or not db_relation.is_resource_created():
             LOGGER.debug("no (postgresql) database relation found or resource not created")
             return None
 
-        db_relation_id = self.database.relations[0].id
-        relation_data = self.database.fetch_relation_data().get(db_relation_id, None)
+        db_relation_id = db_relation.relations[0].id
+        relation_data = db_relation.fetch_relation_data().get(db_relation_id, None)
         if not relation_data:
             LOGGER.debug("no relation data found for relation %s", db_relation_id)
             return None
@@ -588,6 +634,45 @@ class LivepatchCharm(CharmBase):
             "password": relation_data.get("password"),
             "user": relation_data.get("username"),
         }
+
+    def _on_metrics_db_event(self, event: RelationEvent) -> None:
+        """Metrics database event handler."""
+        if not self.model.unit.is_leader():
+            return
+
+        LOGGER.info("(metrics-db) %s event fired.", event.relation.name)
+
+        if not self._state.is_ready():
+            event.defer()
+            LOGGER.warning("State is not ready")
+            return
+
+        dbconn = self._get_db_info(self.metrics_db)
+        if dbconn is None:
+            LOGGER.info("no database connection info found, deferring event")
+            event.defer()
+            return
+
+        ep = dbconn["endpoint"]
+        user = dbconn["user"]
+        password = dbconn["password"]
+
+        uri = f"postgresql://{user}:{password}@{ep}/{METRICS_DB_NAME}"
+        redacted_uri = f"postgresql://{user}:****@{ep}/{METRICS_DB_NAME}"
+
+        LOGGER.info(f"received database uri: {redacted_uri}")
+
+        # record the connection string
+        self._state.dsn_metrics = uri
+
+        self._update_workload_container_config(event)
+
+    def _on_metrics_db_relation_broken(self, event: RelationEvent) -> None:
+        """Handle metrics-db relation broken event."""
+        LOGGER.info("(metrics-db) RELATION_BROKEN event fired.")
+        if self.model.unit.is_leader() and self._state.is_ready():
+            del self._state.dsn_metrics
+        self._update_workload_container_config(event)
 
     def _on_database_relation_broken(self, event: RelationEvent) -> None:
         """Handle database relation broken event."""
@@ -682,21 +767,32 @@ class LivepatchCharm(CharmBase):
             LOGGER.warning("State is not ready")
             return
 
-        db_uri = self._state.dsn
+        targets = self._get_schema_upgrade_targets()
+        db_uri = targets.get("primary")
         container = self.unit.get_container(SCHEMA_UPGRADE_CONTAINER)
         if not db_uri:
             LOGGER.error("DB connection string not set")
             event.fail("schema migration failed: database connection not set/ready")
             return
+        
+        if not self.config.get("influx.enabled") and self.metrics_db.relations:
+            metrics_db_uri = targets.get("timescale")
+            if not metrics_db_uri:
+                LOGGER.error("Metrics DB connection string not set")
+                event.fail("schema migration failed: metrics database connection not set/ready")
+                return
+
         if not container.can_connect():
             LOGGER.error("Cannot connect to the schema upgrade container")
             event.fail("schema migration failed: cannot connect to schema upgrade container")
             return
 
-        try:
-            self.schema_upgrade(container, db_uri)
-        except Exception as e:
-            event.fail(f"schema migration failed: {e}")
+        for db_name, conn_str in targets.items():
+            try:
+                self.schema_upgrade(container, conn_str)
+            except Exception as e:
+                event.fail(f"schema migration failed for {db_name} database: {e}")
+                return
 
     def schema_upgrade(self, container, conn_str):
         """

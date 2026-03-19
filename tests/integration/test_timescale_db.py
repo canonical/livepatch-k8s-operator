@@ -44,7 +44,7 @@ async def test_metrics_db_relation_integration(ops_test: OpsTest):
     )
     
     status = await ops_test.model.get_status()
-    assert status["applications"][APP_NAME]["status"] == ACTIVE_STATUS
+    assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
     assert len(status["applications"][APP_NAME]["relations"]["metrics-db"]) > 0
 
 
@@ -65,7 +65,7 @@ async def test_metrics_db_config_options(ops_test: OpsTest):
     )
     
     status = await ops_test.model.get_status()
-    assert status["applications"][APP_NAME]["status"] == ACTIVE_STATUS
+    assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
 
 
 @pytest.mark.asyncio
@@ -87,7 +87,7 @@ async def test_metrics_db_influx_mutual_exclusion(ops_test: OpsTest):
     )
     
     status = await ops_test.model.get_status()
-    assert status["applications"][APP_NAME]["status"] == ACTIVE_STATUS
+    assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
     
     await ops_test.model.applications[APP_NAME].set_config({
         "influx.enabled": "false",
@@ -100,7 +100,7 @@ async def test_metrics_db_influx_mutual_exclusion(ops_test: OpsTest):
     )
     
     status = await ops_test.model.get_status()
-    assert status["applications"][APP_NAME]["status"] == ACTIVE_STATUS
+    assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
 
 
 @pytest.mark.asyncio
@@ -116,7 +116,7 @@ async def test_metrics_db_relation_broken(ops_test: OpsTest):
     )
     
     status = await ops_test.model.get_status()
-    assert status["applications"][APP_NAME]["status"] == ACTIVE_STATUS
+    assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
     
     relations = status["applications"][APP_NAME].get("relations", {})
     assert "metrics-db" not in relations or len(relations["metrics-db"]) == 0

@@ -219,9 +219,23 @@ class LivepatchCharm(CharmBase):
         """On stop hook."""
         self._stop_service()
 
+    def _get_schema_upgrade_targets(self) -> Dict[str, str]:
+        """Return database targets that require schema checks/upgrades."""
+        targets: Dict[str, str] = {}
+
+        if self._state.dsn:
+            targets["primary"] = self._state.dsn
+
+        dsn_metrics = getattr(self._state, "dsn_metrics", None)
+        if not self.config.get("influx.enabled") and self.metrics_db.relations and dsn_metrics:
+            targets["timescale"] = dsn_metrics
+
+        return targets
+
     def handle_schema_upgrade(self):
         """Check if a schema upgrade is required, and perform it."""
-        dsn = self._state.dsn
+        targets = self._get_schema_upgrade_targets()
+        dsn = targets.get("primary")
         if not dsn:
             LOGGER.info("waiting for PG connection string")
             self.unit.status = BlockedStatus("Waiting for postgres relation to be established.")
@@ -233,14 +247,15 @@ class LivepatchCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect - schema container.")
             raise DeferError
 
-        upgrade_required = False
-        try:
-            upgrade_required = self.migration_is_required(schema_container, dsn)
-        except Exception as e:
-            LOGGER.error(f"Failed to determine if schema upgrade required: {e}")
+        for db_name, conn_str in targets.items():
+            upgrade_required = False
+            try:
+                upgrade_required = self.migration_is_required(schema_container, conn_str)
+            except Exception as e:
+                LOGGER.error(f"Failed to determine if schema upgrade required for {db_name}: {e}")
 
-        if upgrade_required:
-            self.schema_upgrade(schema_container, dsn)
+            if upgrade_required:
+                self.schema_upgrade(schema_container, conn_str)
 
     def get_env_vars(self) -> dict:
         """Map config to env vars and return a processed dict."""
@@ -752,21 +767,32 @@ class LivepatchCharm(CharmBase):
             LOGGER.warning("State is not ready")
             return
 
-        db_uri = self._state.dsn
+        targets = self._get_schema_upgrade_targets()
+        db_uri = targets.get("primary")
         container = self.unit.get_container(SCHEMA_UPGRADE_CONTAINER)
         if not db_uri:
             LOGGER.error("DB connection string not set")
             event.fail("schema migration failed: database connection not set/ready")
             return
+        
+        if not self.config.get("influx.enabled") and self.metrics_db.relations:
+            metrics_db_uri = targets.get("timescale")
+            if not metrics_db_uri:
+                LOGGER.error("Metrics DB connection string not set")
+                event.fail("schema migration failed: metrics database connection not set/ready")
+                return
+
         if not container.can_connect():
             LOGGER.error("Cannot connect to the schema upgrade container")
             event.fail("schema migration failed: cannot connect to schema upgrade container")
             return
 
-        try:
-            self.schema_upgrade(container, db_uri)
-        except Exception as e:
-            event.fail(f"schema migration failed: {e}")
+        for db_name, conn_str in targets.items():
+            try:
+                self.schema_upgrade(container, conn_str)
+            except Exception as e:
+                event.fail(f"schema migration failed for {db_name} database: {e}")
+                return
 
     def schema_upgrade(self, container, conn_str):
         """

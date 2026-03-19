@@ -258,8 +258,9 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             ex.exception.message,
-            "schema migration failed: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
+            "schema migration failed for primary database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
+
 
     def test_on_config_changed__failure__cannot_connect_to_schema_upgrade_container(self):
         """

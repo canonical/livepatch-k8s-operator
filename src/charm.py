@@ -254,7 +254,10 @@ class LivepatchCharm(CharmBase):
                 LOGGER.error(f"Failed to determine if schema upgrade required for {db_name}: {e}")
 
             if upgrade_required:
-                self.schema_upgrade(schema_container, conn_str)
+                try:
+                    self.schema_upgrade(schema_container, conn_str)
+                except Exception as e:
+                    LOGGER.error(f"Failed to perform schema upgrade for {db_name}: {e}")
 
     def get_env_vars(self) -> dict:
         """Map config to env vars and return a processed dict."""

@@ -132,19 +132,28 @@ options:
       PostgreSQL's work_mem, and the server's own default value is used.
     type: int
 
-  timescale.connection-pool-max:
+  timescale_db.enabled:
+    default: false
+    description: Whether or not to enable TimescaleDB for time series data storage.
+    type: boolean
+  timescale_db.connection_pool_max:
     default: 10
     description: The maximum pool of connections to TimescaleDB.
     type: int
-  timescale.connection-lifetime-max:
+  timescale_db.connection_lifetime_max:
     default: 10m
     description: The lifespan of an idle TimescaleDB connection.
     type: string
-  timescale.work_mem:
+  timescale_db.work_mem:
     description: |
       The PostgreSQL work_mem parameter for connections with TimescaleDB.
     default: 16
     type: int
+  timescale_db.flush_timeout:
+    default: 5s
+    description: |
+      The maximum time to wait for a flush to complete when flushing time series data to TimescaleDB.
+    type: string
 
   patch-storage.type:
     default: filesystem
@@ -441,24 +450,24 @@ options:
     type: string
 
   influx.enabled:
-    description: "[DEPRECATED] Enables influx db support for time series reporting."
+    description: "Enables influx db support for time series reporting."
     type: boolean
   influx.url:
     # TODO: This should be changed to a relation
-    description: "[DEPRECATED] URL to connect to influx DB"
+    description: "URL to connect to influx DB"
     type: string
   influx.token:
-    description: "[DEPRECATED] Token to use for influx"
+    description: "Token to use for influx"
     type: string
   influx.bucket:
-    description: "[DEPRECATED] Bucket to send data"
+    description: "Bucket to send data"
     type: string
   influx.ping_bucket:
-    description: "[DEPRECATED] Bucket to send ping data under a different retention policy"
+    description: "Bucket to send ping data under a different retention policy"
     type: string
     
   influx.organization:
-    description: "[DEPRECATED] Organization name"
+    description: "Organization name"
     type: string
 
   cloud_delay.enabled:

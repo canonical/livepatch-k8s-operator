@@ -46,6 +46,7 @@ async def test_metrics_db_relation_integration(ops_test: OpsTest):
     status = await ops_test.model.get_status()
     assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
     assert len(status["applications"][APP_NAME]["relations"]["metrics-db"]) > 0
+    
 
 
 @pytest.mark.asyncio
@@ -54,48 +55,9 @@ async def test_metrics_db_config_options(ops_test: OpsTest):
 
     await ops_test.model.applications[APP_NAME].set_config(
         {
-            "timescale.connection-pool-max": "25",
-            "timescale.connection-lifetime-max": "20m",
-            "timescale.work_mem": "64",
-        }
-    )
-
-    await ops_test.model.wait_for_idle(
-        apps=[APP_NAME],
-        status=ACTIVE_STATUS,
-        timeout=120,
-    )
-
-    status = await ops_test.model.get_status()
-    assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
-
-
-@pytest.mark.asyncio
-async def test_metrics_db_influx_mutual_exclusion(ops_test: OpsTest):
-    """Test that MetricsDB and InfluxDB are mutually exclusive."""
-
-    await ops_test.model.applications[APP_NAME].set_config(
-        {
-            "influx.enabled": "true",
-            "influx.url": "http://influx.example.com:8086",
-            "influx.token": "test-token",
-            "influx.bucket": "test-bucket",
-            "influx.organization": "test-org",
-        }
-    )
-
-    await ops_test.model.wait_for_idle(
-        apps=[APP_NAME],
-        status=ACTIVE_STATUS,
-        timeout=120,
-    )
-
-    status = await ops_test.model.get_status()
-    assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
-
-    await ops_test.model.applications[APP_NAME].set_config(
-        {
-            "influx.enabled": "false",
+            "timescale_db.connection_pool_max": "25",
+            "timescale_db.connection_lifetime_max": "20m",
+            "timescale_db.work_mem": "64",
         }
     )
 

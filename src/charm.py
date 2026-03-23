@@ -226,9 +226,8 @@ class LivepatchCharm(CharmBase):
         if self._state.dsn:
             targets["primary"] = self._state.dsn
 
-        dsn_metrics = getattr(self._state, "dsn_metrics", None)
-        if not self.config.get("influx.enabled") and self.metrics_db.relations and dsn_metrics:
-            targets["timescale"] = dsn_metrics
+        if self._state.dsn_metrics:
+            targets["timescale"] = self._state.dsn_metrics
 
         return targets
 
@@ -284,15 +283,6 @@ class LivepatchCharm(CharmBase):
             # Note that other env vars are already set from the configuration.
             env_vars["LP_CVE_SYNC_SOURCE_URL"] = cve_service_address
             env_vars["LP_LSN_SYNC_SOURCE_URL"] = cve_service_address
-
-        # MetricsDB integration should only be used if not using InfluxDB.
-        # Using influx for kpi monitoring is deprecated and will be removed soon.
-        dsn_metrics = getattr(self._state, "dsn_metrics", None)
-        if not self.config.get("influx.enabled") and self.metrics_db.relations and dsn_metrics:
-            env_vars["LP_TIMESCALE_DB_CONNECTION_STRING"] = dsn_metrics
-            env_vars["LP_TIMESCALE_DB_CONNECTION_POOL_MAX"] = self.config.get("timescale.connection-pool-max")
-            env_vars["LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX"] = self.config.get("timescale.connection-lifetime-max")
-            env_vars["LP_TIMESCALE_DB_WORK_MEM"] = self.config.get("timescale.work_mem")
 
         # Some extra config and checks
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn
@@ -658,11 +648,9 @@ class LivepatchCharm(CharmBase):
         password = dbconn["password"]
 
         uri = f"postgresql://{user}:{password}@{ep}/{METRICS_DB_NAME}"
-        redacted_uri = f"postgresql://{user}:****@{ep}/{METRICS_DB_NAME}"
 
-        LOGGER.info(f"received database uri: {redacted_uri}")
+        LOGGER.info(f"received database uri for {METRICS_DB_NAME}")
 
-        # record the connection string
         self._state.dsn_metrics = uri
 
         self._update_workload_container_config(event)
@@ -775,7 +763,7 @@ class LivepatchCharm(CharmBase):
             event.fail("schema migration failed: database connection not set/ready")
             return
         
-        if not self.config.get("influx.enabled") and self.metrics_db.relations:
+        if self.config.get("timescale_db.enabled"):
             metrics_db_uri = targets.get("timescale")
             if not metrics_db_uri:
                 LOGGER.error("Metrics DB connection string not set")

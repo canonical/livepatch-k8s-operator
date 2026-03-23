@@ -77,6 +77,15 @@ jobs:
           EOL
           echo "$REGISTRY_CONFIG" | sudo tee -a /var/snap/microk8s/current/args/containerd-template.toml
           sudo snap restart microk8s.daemon-containerd
+      - name: Bootstrap a controller on the LXD cloud
+        run: /usr/bin/sudo -g snap_microk8s -E juju bootstrap localhost localhost-localhost
+      - name: Tweak MicroK8s API address
+        run: |
+          sudo microk8s.config > /tmp/client.config
+          sudo cp /tmp/client.config /var/snap/microk8s/current/credentials/client.config
+      - name: Add MicroK8s cloud to LXD controller
+        run: |
+          /usr/bin/sudo -g snap_microk8s -E juju add-cloud microk8s --controller localhost-localhost --credential microk8s
       - name: Install tox
         run: python -m pip install tox
       - name: Run integration tests for metrics database

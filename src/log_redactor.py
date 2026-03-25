@@ -46,7 +46,7 @@ _KV_PATTERN = re.compile(
     r"password|passwd|secret|token|"
     r"api[_\-]?key|api[_\-]?secret|"
     r"access[_\-]?key|private[_\-]?key|auth[_\-]?key|"
-    r"credentials|host|user|username"
+    r"credentials|host"
     r")\b)"
     r"(?P<sep>\s*[=:]\s*)"
     r"(?P<quote>['\"]?)"
@@ -176,5 +176,8 @@ def setup_log_redaction() -> None:
       ``RedactingFormatter`` as a safety net.
     """
     root = logging.getLogger()
+
+    # Wrap existing handlers with RedactingFormatter if not already wrapped.
     for handler in root.handlers:
-        handler.setFormatter(RedactingFormatter(handler.formatter))
+        if not isinstance(handler.formatter, RedactingFormatter):
+            handler.setFormatter(RedactingFormatter(handler.formatter))

@@ -3,10 +3,9 @@
 
 """Module containing logic for converting from the legacy machine charm config to new config format."""
 
+from typing import Any, Dict, List
+
 import yaml
-from typing import (Any,
-                    Dict,
-                    List)
 
 # Config map for converting from old reactive charm configs to the modern config format.
 CONFIG_MAP = {
@@ -150,7 +149,7 @@ def __map_legacy_config(
         if parsed_val == "":
             return
 
-        converted_options[val] = parsed_val # type: ignore
+        converted_options[val] = parsed_val  # type: ignore
 
 
 def map_old_config_to_new_config(conf: dict) -> dict:

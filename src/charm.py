@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2024 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 # Learn more at: https://juju.is/docs/sdk
@@ -16,8 +16,8 @@ from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
@@ -26,6 +26,7 @@ from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, Relati
 import utils
 from constants import LOGGER, SCHEMA_UPGRADE_CONTAINER, WORKLOAD_CONTAINER
 from legacy_constants import map_old_config_to_new_config
+from log_redactor import setup_log_redaction
 from state import State
 
 SERVER_PORT = 8080
@@ -57,6 +58,7 @@ class LivepatchCharm(CharmBase):
     def __init__(self, *args):
         """Init function."""
         super().__init__(*args)
+        setup_log_redaction()
 
         self._state = State(self.app, lambda: self.model.get_relation("livepatch"))
 
@@ -255,11 +257,7 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
         # remove empty environment values
-        env_vars = {
-            key: value
-            for key, value in env_vars.items() 
-            if value != "" and value is not None
-        }
+        env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
         # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
         explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
@@ -290,10 +288,10 @@ class LivepatchCharm(CharmBase):
 
             if not self._configured_ingress or self._configured_ingress != "legacy-nginx-route":
                 self.ingress = require_nginx_route(
-                charm=self,
-                service_hostname=self.app.name,
-                service_name=self.app.name,
-                service_port=SERVER_PORT,
+                    charm=self,
+                    service_hostname=self.app.name,
+                    service_name=self.app.name,
+                    service_port=SERVER_PORT,
                 )
                 self._configured_ingress = "legacy-nginx-route"
 
@@ -301,9 +299,9 @@ class LivepatchCharm(CharmBase):
             LOGGER.info("Ingress interface specified as ingress")
             if not self._configured_ingress or self._configured_ingress != "ingress":
                 self.ingress = IngressPerAppRequirer(
-                charm=self,
-                relation_name="ingress",
-                port=SERVER_PORT,
+                    charm=self,
+                    relation_name="ingress",
+                    port=SERVER_PORT,
                 )
                 self._configured_ingress = "ingress"
         else:
@@ -561,7 +559,7 @@ class LivepatchCharm(CharmBase):
         # compose the db connection string
         uri = f"postgresql://{user}:{password}@{ep}/{DATABASE_NAME}"
 
-        LOGGER.info(f"received database uri: {uri}")
+        LOGGER.info("received database connection for database: %s", DATABASE_NAME)
 
         # record the connection string
         self._state.dsn = uri
@@ -580,9 +578,7 @@ class LivepatchCharm(CharmBase):
             LOGGER.debug("no relation data found for relation %s", db_relation_id)
             return None
 
-        LOGGER.debug("database endpoints: %s", relation_data.get("endpoints"))
         endpoint = relation_data.get("endpoints").split(",")[0]
-        LOGGER.info("database endpoint: %s", endpoint)
         return {
             "endpoint": endpoint,
             "password": relation_data.get("password"),

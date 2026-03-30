@@ -41,9 +41,13 @@ juju integrate canonical-livepatch-server-k8s:nginx-route nginx-ingress-integrat
 
 ### Loki (optional)
 
-Livepatch can be optionally integrated with [Loki](https://charmhub.io/loki-k8s) via the `log-proxy` endpoint. Users can integrate other applications with this endpoint by using Juju as follows:
+Livepatch can be optionally integrated with [Loki](https://charmhub.io/loki-k8s) via the `logging` endpoint (Juju >= 3.4) or the `log-proxy` endpoint (Juju < 3.4). Users can integrate using Juju as follows:
 
 ```sh
+# Juju >= 3.4 (recommended, uses Pebble log forwarding)
+juju integrate canonical-livepatch-server-k8s:logging loki-k8s:logging
+
+# Juju < 3.4 (legacy, uses Promtail sidecar)
 juju integrate canonical-livepatch-server-k8s:log-proxy loki-k8s:logging
 ```
 

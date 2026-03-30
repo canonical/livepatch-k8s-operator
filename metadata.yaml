@@ -73,6 +73,9 @@ requires:
     interface: loki_push_api
     optional: true
     limit: 1
+  logging:
+    interface: loki_push_api
+    optional: true
 
 containers:
   livepatch:
@@ -89,8 +92,8 @@ resources:
     type: oci-image
     description: OCI Image for Schema upgrade tool
     upstream-source: ghcr.io/canonical/livepatch-server:v1.19.1
-  # Temporary workaround until pebble can forward logs to Loki directly.
   promtail-bin:
     type: file
     description: Promtail binary for logging
     filename: promtail-linux
+

@@ -47,8 +47,7 @@ async def test_metrics_db_relation_integration(ops_test: OpsTest):
 
         logger.info("Creating application offer for cross-model relation: %s", METRICS_OFFER_NAME)
         await ops_test.model.create_offer(
-            endpoint=f"{POSTGRESQL_METRICS_APP}",
-            application_name=POSTGRESQL_METRICS_APP,
+            endpoint=f"{POSTGRESQL_METRICS_APP}:{POSTGRESQL_METRICS_ENDPOINT}",
             offer_name=METRICS_OFFER_NAME,
         )
 

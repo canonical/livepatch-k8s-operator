@@ -15,6 +15,7 @@ from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
 
+from log_redactor import _REDACTED
 from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT, LivepatchCharm
 from src.state import State
 
@@ -1458,7 +1459,6 @@ settings:
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | contains, "environment does not contain expected key/value pairs")
 
-
     def _add_database_legacy_relation(self, dsn_string: str = "postgresql://user:pass@host:5432/livepatch-server"):
         """Helper method to add and configure a legacy database relation."""
         db_rel_id = self.harness.add_relation("database-legacy", "postgresql")
@@ -1671,6 +1671,90 @@ settings:
         self.assertTrue(service.is_running())
         self.assertEqual(self.harness.charm._state.dsn, new_dsn_string)
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
+
+
+class TestSensitiveDataRedactedInLogs(unittest.TestCase):
+    """Verify that sensitive information never appears in charm log output."""
+
+    def setUp(self):
+        self.harness = Harness(LivepatchCharm)
+        self.addCleanup(self.harness.cleanup)
+
+        self.version_file = pathlib.Path("version")
+        pathlib.Path.touch(self.version_file)
+        self.addCleanup(lambda: os.remove(self.version_file))
+
+        self.harness.disable_hooks()
+        self.harness.add_oci_resource("livepatch-server-image")
+        self.harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
+        self.harness.begin()
+        rel_id = self.harness.add_relation("livepatch", "livepatch")
+        self.harness.add_relation_unit(rel_id, f"{APP_NAME}/1")
+        self.harness.container_pebble_ready("livepatch")
+        self.harness.container_pebble_ready("livepatch-schema-upgrade")
+
+    def _joined_logs(self, cm) -> str:
+        """Return all captured log lines as a single newline-separated string."""
+        return "\n".join(cm.output)
+
+    def test_database_relation_event_does_not_log_sensitive_info(self):
+        """Standard database relation must log the endpoint but never the DB password."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        with self.assertLogs(level="DEBUG") as cm:
+            db_rel_id = self.harness.add_relation("database", "postgres-new")
+            self.harness.add_relation_unit(db_rel_id, "postgres-new/0")
+            self.harness.update_relation_data(
+                db_rel_id,
+                "postgres-new",
+                {
+                    "username": "dbuser",
+                    "password": "dbsecret",  # nosec
+                    "endpoints": "dbhost.example.com:5432",
+                },
+            )
+
+        all_logs = self._joined_logs(cm)
+        self.assertNotIn("postgresql://dbuser:dbsecret/dbhost.example.com:5432", all_logs)
+        self.assertNotIn("dbsecret", all_logs)
+        self.assertNotIn("dbhost.example.com:5432", all_logs)
+
+    def test_schema_upgrade_failure_dsn_in_stderr_is_redacted(self):
+        """When the schema tool echoes the DSN back in stderr, it must be redacted in logs."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        dsn = "postgresql://schemauser:schemasecret@db.host:5432/livepatch-server"
+        self.harness.charm._state.dsn = dsn
+        self.harness.charm._state.resource_token = TEST_TOKEN
+
+        schema_container = self.harness.model.unit.get_container("livepatch-schema-upgrade")
+        schema_container.exists = Mock(return_value=True)
+
+        def exec_side_effect(command):
+            def throw():
+                # Simulate schema tool echoing the DSN back in its error output
+                raise pebble.ExecError(
+                    command,
+                    1,
+                    "",
+                    f"could not connect to server: {dsn}",
+                )
+
+            process_mock = Mock()
+            process_mock.wait_output.side_effect = throw
+            return process_mock
+
+        schema_container.exec = Mock(side_effect=exec_side_effect)
+
+        with self.assertLogs(level="ERROR") as cm:
+            with self.assertRaises(ActionFailed):
+                self.harness.run_action("schema-upgrade")
+
+        all_logs = self._joined_logs(cm)
+        self.assertNotIn("schemasecret", all_logs)
+        self.assertIn(_REDACTED, all_logs)
 
 
 class TestIngressInterface(unittest.TestCase):

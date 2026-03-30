@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2024 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 # pylint: disable=too-many-lines
 # Learn more at: https://juju.is/docs/sdk
@@ -27,6 +27,7 @@ from ops.model import ActiveStatus, BlockedStatus, Container, ModelError, Relati
 import utils
 from constants import LOGGER, SCHEMA_UPGRADE_CONTAINER, WORKLOAD_CONTAINER
 from legacy_constants import map_old_config_to_new_config
+from log_redactor import setup_log_redaction
 from state import State
 
 SERVER_PORT = 8080
@@ -60,6 +61,7 @@ class LivepatchCharm(CharmBase):
     def __init__(self, *args):
         """Init function."""
         super().__init__(*args)
+        setup_log_redaction()
 
         self._state = State(self.app, lambda: self.model.get_relation("livepatch"))
 
@@ -600,7 +602,7 @@ class LivepatchCharm(CharmBase):
         # compose the db connection string
         uri = f"postgresql://{user}:{password}@{ep}/{DATABASE_NAME}"
 
-        LOGGER.info(f"received database uri: {uri}")
+        LOGGER.info("received database connection for database: %s", DATABASE_NAME)
 
         # record the connection string
         self._state.dsn = uri
@@ -619,9 +621,7 @@ class LivepatchCharm(CharmBase):
             LOGGER.debug("no relation data found for relation %s", db_relation_id)
             return None
 
-        LOGGER.debug("database endpoints: %s", relation_data.get("endpoints"))
         endpoint = relation_data.get("endpoints").split(",")[0]
-        LOGGER.info("database endpoint: %s", endpoint)
         return {
             "endpoint": endpoint,
             "password": relation_data.get("password"),

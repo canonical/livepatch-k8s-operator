@@ -130,10 +130,11 @@ class LivepatchCharm(CharmBase):
         # Loki log-proxy relation (for Juju < 3.4)
         self._log_proxy = LogProxyConsumer(
             self,
-            log_files=[LOG_FILE],
+            logs_scheme={
+                WORKLOAD_CONTAINER: {"log-files": [LOG_FILE]},
+            },
             relation_name="log-proxy",
             promtail_resource_name="promtail-bin",
-            container_name=WORKLOAD_CONTAINER,
         )
 
         # Loki log-forwarding relation (for Juju >= 3.4)

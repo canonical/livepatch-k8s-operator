@@ -35,7 +35,7 @@ async def test_metrics_db_relation_integration(ops_test: OpsTest):
             POSTGRESQL_METRICS_CHARM,
             application_name=POSTGRESQL_METRICS_APP,
             channel=POSTGRESQL_METRICS_CHANNEL,
-            base="ubuntu@22.04",
+            base="ubuntu@24.04",
             num_units=1,
         )
 

@@ -136,7 +136,6 @@ class TestMetricsDBFunctionality(unittest.TestCase):
 
         metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
         self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
-        self.harness.update_config({"influx.enabled": False})
 
         with patch("src.charm.LivepatchCharm.migration_is_required", side_effect=[True, True]) as migration:
             with patch("src.charm.LivepatchCharm.schema_upgrade") as schema_upgrade:

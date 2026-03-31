@@ -150,7 +150,7 @@ options:
     default: 16
     type: int
   timescale_db.flush_timeout:
-    default: 5s
+    default: 1m
     description: |
       The maximum time to wait for a flush to complete when flushing time series data to TimescaleDB.
     type: string

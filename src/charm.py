@@ -14,7 +14,7 @@ import pgsql
 import yaml
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
-from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
+from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
@@ -127,13 +127,20 @@ class LivepatchCharm(CharmBase):
 
         self._update_ingress_method()
 
-        # Loki log-proxy relation
-        self.log_proxy = LogProxyConsumer(
+        # Loki log-proxy relation (for Juju < 3.4)
+        self._log_proxy = LogProxyConsumer(
             self,
-            log_files=[LOG_FILE],
+            logs_scheme={
+                WORKLOAD_CONTAINER: {"log-files": [LOG_FILE]},
+            },
             relation_name="log-proxy",
             promtail_resource_name="promtail-bin",
-            container_name=WORKLOAD_CONTAINER,
+        )
+
+        # Loki log-forwarding relation (for Juju >= 3.4)
+        self._log_forwarder = LogForwarder(
+            self,
+            relation_name="logging",
         )
 
         # Prometheus metrics endpoint relation

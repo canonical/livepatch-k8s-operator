@@ -84,6 +84,7 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         }
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment, environment | required_environment)
+
     def test_get_db_info_with_metrics_relation(self):
         """Test _get_db_info method works correctly with MetricsDB relation."""
         metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")

@@ -95,7 +95,7 @@ resources:
   livepatch-schema-upgrade-tool-image:
     type: oci-image
     description: OCI Image for Schema upgrade tool
-    upstream-source: ghcr.io/canonical/livepatch-server:v1.20.1
+    upstream-source: ghcr.io/canonical/livepatch-server:v1.20.0
   promtail-bin:
     type: file
     description: Promtail binary for logging

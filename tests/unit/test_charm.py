@@ -266,7 +266,6 @@ class TestCharm(unittest.TestCase):
             "schema migration failed for livepatchdb database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
 
-
     def test_on_config_changed__failure__cannot_connect_to_schema_upgrade_container(self):
         """
         Test the scenario where `on-config-changed` event handler fails due to

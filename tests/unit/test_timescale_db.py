@@ -3,13 +3,13 @@
 
 """Additional unit tests specifically for MetricsDB functionality."""
 
-from typing import Any, Dict
-import unittest
-from unittest.mock import Mock, patch
-import pathlib
 import os
+import pathlib
+import unittest
+from typing import Any, Dict
+from unittest.mock import Mock, patch
 
-from ops.testing import Harness, ActionFailed
+from ops.testing import ActionFailed, Harness
 
 from src.charm import LivepatchCharm
 
@@ -17,6 +17,7 @@ TEST_TOKEN = "test-token"  # nosec
 APP_NAME = "canonical-livepatch-server-k8s"
 
 
+# pylint: disable=too-many-public-methods
 class TestMetricsDBFunctionality(unittest.TestCase):
     """Test MetricsDB specific functionality."""
 
@@ -101,7 +102,6 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=True), patch.object(
             self.harness.charm.metrics_db, "fetch_relation_data", return_value=mock_relation_data
         ):
-
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
 
             self.assertIsNotNone(db_info)
@@ -125,7 +125,6 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=True), patch.object(
             self.harness.charm.metrics_db, "fetch_relation_data", return_value={}
         ):
-
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
             self.assertIsNone(db_info)
 
@@ -191,7 +190,7 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         )
 
         self.harness.charm._on_metrics_db_event(Mock(relation=Mock(name="metrics-db")))
-    
+
         expected_dsn = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
         self.assertEqual(self.harness.charm._state.dsn_metrics, expected_dsn)
 
@@ -473,10 +472,14 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         self.harness.charm._state.dsn_metrics = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
         self.harness.charm.on.config_changed.emit()
 
-        environment = self.harness.get_container_pebble_plan("livepatch").to_dict()["services"]["livepatch"]["environment"]
+        environment = self.harness.get_container_pebble_plan("livepatch").to_dict()["services"]["livepatch"][
+            "environment"
+        ]
         self.assertIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
 
         self.harness.charm._on_metrics_db_relation_broken(Mock())
 
-        environment = self.harness.get_container_pebble_plan("livepatch").to_dict()["services"]["livepatch"]["environment"]
+        environment = self.harness.get_container_pebble_plan("livepatch").to_dict()["services"]["livepatch"][
+            "environment"
+        ]
         self.assertEqual(environment.get("LP_TIMESCALE_DB_CONNECTION_STRING"), "")

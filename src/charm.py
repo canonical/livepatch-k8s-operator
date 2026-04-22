@@ -773,7 +773,7 @@ class LivepatchCharm(CharmBase):
             LOGGER.error("DB connection string not set")
             event.fail("schema migration failed: database connection not set/ready")
             return
-        
+
         if self.config.get("timescale_db.enabled"):
             metrics_db_uri = targets.get("timescaledb")
             if not metrics_db_uri:
@@ -849,14 +849,14 @@ class LivepatchCharm(CharmBase):
             LOGGER.error("DB connection string not set")
             event.fail("schema migration failed: database connection not set/ready")
             return
-        
+
         if self.config.get("timescale_db.enabled"):
             metrics_db_uri = targets.get("timescaledb")
             if not metrics_db_uri:
                 LOGGER.error("Metrics DB connection string not set")
                 event.fail("schema migration failed: metrics database connection not set/ready")
                 return
-        
+
         if not container.can_connect():
             LOGGER.error("cannot connect to the schema upgrade container")
             event.fail("schema migration failed: cannot connect to the schema upgrade container")
@@ -864,7 +864,7 @@ class LivepatchCharm(CharmBase):
 
         for db_name, conn_str in targets.items():
             try:
-                migration_required = self.migration_is_required(container, db_name,  conn_str)
+                migration_required = self.migration_is_required(container, db_name, conn_str)
                 event.set_results({f"migration-required-{db_name}": migration_required})
             except Exception as e:
                 event.fail(f"schema version check failed for {db_name}: {e}")

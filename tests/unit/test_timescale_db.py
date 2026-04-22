@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 import pathlib
 import os
 
+from ops._private.harness import ActionFailed
 from ops.testing import Harness
 
 from src.charm import LivepatchCharm
@@ -143,12 +144,16 @@ class TestMetricsDBFunctionality(unittest.TestCase):
                 self.harness.charm.handle_schema_upgrade()
 
         self.assertEqual(migration.call_count, 2)
-        self.assertEqual(migration.call_args_list[0].args[1], "postgresql://primary")
-        self.assertEqual(migration.call_args_list[1].args[1], "postgresql://timescale")
+        self.assertEqual(migration.call_args_list[0].args[1], "livepatchdb")
+        self.assertEqual(migration.call_args_list[0].args[2], "postgresql://primary")
+        self.assertEqual(migration.call_args_list[1].args[1], "timescaledb")
+        self.assertEqual(migration.call_args_list[1].args[2], "postgresql://timescale")
 
         self.assertEqual(schema_upgrade.call_count, 2)
-        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "postgresql://primary")
-        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "postgresql://timescale")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "livepatchdb")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[2], "postgresql://primary")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "timescaledb")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[2], "postgresql://timescale")
 
     def test_schema_upgrade_action_runs_for_timescale_when_enabled(self):
         """Test schema-upgrade action upgrades both primary and Timescale databases."""
@@ -164,8 +169,10 @@ class TestMetricsDBFunctionality(unittest.TestCase):
             self.harness.run_action("schema-upgrade")
 
         self.assertEqual(schema_upgrade.call_count, 2)
-        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "postgresql://primary")
-        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "postgresql://timescale")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "livepatchdb")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[2], "postgresql://primary")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "timescaledb")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[2], "postgresql://timescale")
 
     def test_metrics_db_event_handles_relation_created(self):
         """Test MetricsDB relation created event is handled properly."""
@@ -196,6 +203,16 @@ class TestMetricsDBFunctionality(unittest.TestCase):
 
         metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
         self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+        self.harness.update_relation_data(
+            metrics_rel_id,
+            "postgresql",
+            {
+                "endpoints": "postgres.local:5432",
+                "username": "tsuser",
+                "password": "tspass",  # nosec B105
+            },
+        )
+        self.harness.charm._on_metrics_db_event(Mock(relation=Mock(name="metrics-db")))
 
         self.harness.update_config(
             {
@@ -211,6 +228,7 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         self._assert_environment_contains(
             {
                 "LP_TIMESCALE_DB_ENABLED": True,
+                "LP_TIMESCALE_DB_CONNECTION_STRING": "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db",
                 "LP_TIMESCALE_DB_CONNECTION_POOL_MAX": 20,
                 "LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX": "30m",
                 "LP_TIMESCALE_DB_WORK_MEM": 32,
@@ -233,7 +251,9 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("livepatch")
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
 
-        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        # LP_TIMESCALE_DB_CONNECTION_STRING is explicitly set to "" when no metrics-db relation exists,
+        # so that any previously set value is cleared from the Pebble layer (override: merge semantics).
+        self.assertEqual(environment.get("LP_TIMESCALE_DB_CONNECTION_STRING"), "")
 
     def test_metrics_db_event_defers_when_no_db_info(self):
         """Test MetricsDB event is deferred when database info is not available."""
@@ -310,3 +330,154 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         self.assertEqual(environment["LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX"], "10m")
         self.assertIn("LP_TIMESCALE_DB_WORK_MEM", environment)
         self.assertEqual(environment["LP_TIMESCALE_DB_WORK_MEM"], 16)
+
+    def test_lp_timescale_db_connection_string_set_when_dsn_metrics_available(self):
+        """Test LP_TIMESCALE_DB_CONNECTION_STRING env var is set when dsn_metrics is available."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.charm._state.dsn_metrics = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
+
+        self.harness.charm.on.config_changed.emit()
+
+        self._assert_environment_contains(
+            {"LP_TIMESCALE_DB_CONNECTION_STRING": "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"}
+        )
+
+    def test_lp_timescale_db_connection_string_empty_when_no_dsn_metrics(self):
+        """Test LP_TIMESCALE_DB_CONNECTION_STRING is set to empty string when dsn_metrics is not set.
+
+        The key is explicitly present as "" to override any previously set value in the Pebble layer
+        (required because the service uses override: merge semantics).
+        """
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.charm._state.dsn_metrics = None
+
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment.get("LP_TIMESCALE_DB_CONNECTION_STRING"), "")
+
+    def test_get_schema_upgrade_targets_includes_livepatchdb_key(self):
+        """Test _get_schema_upgrade_targets uses 'livepatchdb' as the primary DB key."""
+        self.harness.charm._state.dsn = "postgresql://primary"
+        self.harness.charm._state.dsn_metrics = None
+
+        targets = self.harness.charm._get_schema_upgrade_targets()
+
+        self.assertIn("livepatchdb", targets)
+        self.assertEqual(targets["livepatchdb"], "postgresql://primary")
+        self.assertNotIn("timescaledb", targets)
+
+    def test_get_schema_upgrade_targets_includes_timescaledb_key_when_metrics_present(self):
+        """Test _get_schema_upgrade_targets uses 'timescaledb' as the metrics DB key."""
+        self.harness.charm._state.dsn = "postgresql://primary"
+        self.harness.charm._state.dsn_metrics = "postgresql://timescale"
+
+        targets = self.harness.charm._get_schema_upgrade_targets()
+
+        self.assertIn("livepatchdb", targets)
+        self.assertEqual(targets["livepatchdb"], "postgresql://primary")
+        self.assertIn("timescaledb", targets)
+        self.assertEqual(targets["timescaledb"], "postgresql://timescale")
+
+    def test_schema_version_action_checks_both_dbs_when_timescale_enabled(self):
+        """Test schema-version action checks both databases when timescale_db.enabled=True."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.charm._state.dsn_metrics = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
+        self.harness.update_config({"timescale_db.enabled": True})
+
+        schema_upgrade_container = self.harness.model.unit.get_container("livepatch-schema-upgrade")
+        schema_upgrade_container.exists = Mock(return_value=True)
+
+        call_index = [0]
+        expected_commands = [
+            ["/usr/local/bin/livepatch-schema-tool", "check", "--db", "postgresql://123", "--target", "livepatchdb"],
+            [
+                "/usr/local/bin/livepatch-schema-tool",
+                "check",
+                "--db",
+                "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db",
+                "--target",
+                "timescaledb",
+            ],
+        ]
+
+        def container_exec_side_effect(command):
+            self.assertEqual(command, expected_commands[call_index[0]])
+            call_index[0] += 1
+            process_mock = Mock()
+            process_mock.wait_output.return_value = (None, None)
+            return process_mock
+
+        schema_upgrade_container.exec = Mock(side_effect=container_exec_side_effect)
+
+        output = self.harness.run_action("schema-version")
+
+        self.assertEqual(schema_upgrade_container.exec.call_count, 2)
+        self.assertFalse(output.results["migration-required-livepatchdb"])
+        self.assertFalse(output.results["migration-required-timescaledb"])
+
+    def test_schema_version_action_fails_when_timescale_enabled_but_no_dsn_metrics(self):
+        """Test schema-version action fails when timescale_db.enabled=True but no metrics relation."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.charm._state.dsn_metrics = None
+        self.harness.update_config({"timescale_db.enabled": True})
+
+        with self.assertRaises(ActionFailed) as ex:
+            self.harness.run_action("schema-version")
+
+        self.assertIn("metrics database connection not set/ready", ex.exception.message)
+
+    def test_schema_upgrade_action_fails_when_timescale_enabled_but_no_dsn_metrics(self):
+        """Test schema-upgrade action fails when timescale_db.enabled=True but no metrics relation."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.charm._state.dsn_metrics = None
+        self.harness.update_config({"timescale_db.enabled": True})
+
+        with self.assertRaises(ActionFailed) as ex:
+            self.harness.run_action("schema-upgrade")
+
+        self.assertIn("metrics database connection not set/ready", ex.exception.message)
+
+    def test_handle_schema_upgrade_runs_timescale_regardless_of_config_flag(self):
+        """Test handle_schema_upgrade runs for timescaleDB based on dsn_metrics alone, ignoring config flag."""
+        self.harness.charm._state.dsn = "postgresql://primary"
+        self.harness.charm._state.dsn_metrics = "postgresql://timescale"
+        self.harness.model.unit.get_container("livepatch-schema-upgrade").can_connect = lambda: True
+        self.harness.update_config({"timescale_db.enabled": False})
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=True) as migration:
+            with patch("src.charm.LivepatchCharm.schema_upgrade") as schema_upgrade:
+                self.harness.charm.handle_schema_upgrade()
+
+        self.assertEqual(migration.call_count, 2)
+        self.assertEqual(schema_upgrade.call_count, 2)
+        db_names = [call.args[1] for call in schema_upgrade.call_args_list]
+        self.assertIn("livepatchdb", db_names)
+        self.assertIn("timescaledb", db_names)
+
+    def test_metrics_db_relation_broken_clears_connection_string_from_env(self):
+        """Test _on_metrics_db_relation_broken removes LP_TIMESCALE_DB_CONNECTION_STRING from env."""
+        self.harness.set_leader(True)
+        self.start_container()
+
+        self.harness.charm._state.dsn_metrics = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
+        self.harness.charm.on.config_changed.emit()
+
+        environment = self.harness.get_container_pebble_plan("livepatch").to_dict()["services"]["livepatch"]["environment"]
+        self.assertIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+
+        self.harness.charm._on_metrics_db_relation_broken(Mock())
+
+        environment = self.harness.get_container_pebble_plan("livepatch").to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment.get("LP_TIMESCALE_DB_CONNECTION_STRING"), "")

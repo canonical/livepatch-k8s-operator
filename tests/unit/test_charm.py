@@ -205,6 +205,8 @@ class TestCharm(unittest.TestCase):
                     "upgrade",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
             process_mock = Mock()
@@ -242,6 +244,8 @@ class TestCharm(unittest.TestCase):
                     "upgrade",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
 
@@ -259,7 +263,7 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             ex.exception.message,
-            "schema migration failed for primary database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
+            "schema migration failed for livepatchdb database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
 
 
@@ -340,6 +344,8 @@ class TestCharm(unittest.TestCase):
                     "check",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
             process_mock = Mock()
@@ -350,7 +356,7 @@ class TestCharm(unittest.TestCase):
 
         output = self.harness.run_action("schema-version")
 
-        self.assertEqual(output.results, {"migration-required": False})
+        self.assertEqual(output.results, {"migration-required-livepatchdb": False})
 
     def test_schema_version_action__success__migration_required(self):
         """
@@ -379,6 +385,8 @@ class TestCharm(unittest.TestCase):
                     "check",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
 
@@ -393,7 +401,7 @@ class TestCharm(unittest.TestCase):
 
         output = self.harness.run_action("schema-version")
 
-        self.assertEqual(output.results, {"migration-required": True})
+        self.assertEqual(output.results, {"migration-required-livepatchdb": True})
 
     def test_schema_version_action__failure(self):
         """Test the scenario where `schema-version` action fails."""
@@ -419,6 +427,8 @@ class TestCharm(unittest.TestCase):
                     "check",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
 
@@ -436,7 +446,7 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             ex.exception.message,
-            "schema version check failed: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
+            "schema version check failed for livepatchdb: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
 
     def test_get_resource_token_action__success(self):

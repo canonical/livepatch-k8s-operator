@@ -233,17 +233,17 @@ class LivepatchCharm(CharmBase):
         targets: Dict[str, str] = {}
 
         if self._state.dsn:
-            targets["primary"] = self._state.dsn
+            targets["livepatchdb"] = self._state.dsn
 
         if self._state.dsn_metrics:
-            targets["timescale"] = self._state.dsn_metrics
+            targets["timescaledb"] = self._state.dsn_metrics
 
         return targets
 
     def handle_schema_upgrade(self):
         """Check if a schema upgrade is required, and perform it."""
         targets = self._get_schema_upgrade_targets()
-        dsn = targets.get("primary")
+        dsn = targets.get("livepatchdb")
         if not dsn:
             LOGGER.info("waiting for PG connection string")
             self.unit.status = BlockedStatus("Waiting for postgres relation to be established.")
@@ -258,13 +258,13 @@ class LivepatchCharm(CharmBase):
         for db_name, conn_str in targets.items():
             upgrade_required = False
             try:
-                upgrade_required = self.migration_is_required(schema_container, conn_str)
+                upgrade_required = self.migration_is_required(schema_container, db_name, conn_str)
             except Exception as e:
                 LOGGER.error(f"Failed to determine if schema upgrade required for {db_name}: {e}")
 
             if upgrade_required:
                 try:
-                    self.schema_upgrade(schema_container, conn_str)
+                    self.schema_upgrade(schema_container, db_name, conn_str)
                 except Exception as e:
                     LOGGER.error(f"Failed to perform schema upgrade for {db_name}: {e}")
 
@@ -298,6 +298,7 @@ class LivepatchCharm(CharmBase):
 
         # Some extra config and checks
         env_vars["LP_DATABASE_CONNECTION_STRING"] = self._state.dsn
+        env_vars["LP_TIMESCALE_DB_CONNECTION_STRING"] = self._state.dsn_metrics
         env_vars["LP_SERVER_SERVER_ADDRESS"] = f":{SERVER_PORT}"
 
         if self.config.get("patch-storage.type") == "postgres":
@@ -310,7 +311,7 @@ class LivepatchCharm(CharmBase):
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
         # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
-        explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
+        explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL", "LP_TIMESCALE_DB_CONNECTION_STRING"}
         # Set keys to empty string if they are not already set.
         for key in explicit_keys:
             env_vars.setdefault(key, "")
@@ -766,7 +767,7 @@ class LivepatchCharm(CharmBase):
             return
 
         targets = self._get_schema_upgrade_targets()
-        db_uri = targets.get("primary")
+        db_uri = targets.get("livepatchdb")
         container = self.unit.get_container(SCHEMA_UPGRADE_CONTAINER)
         if not db_uri:
             LOGGER.error("DB connection string not set")
@@ -774,7 +775,7 @@ class LivepatchCharm(CharmBase):
             return
         
         if self.config.get("timescale_db.enabled"):
-            metrics_db_uri = targets.get("timescale")
+            metrics_db_uri = targets.get("timescaledb")
             if not metrics_db_uri:
                 LOGGER.error("Metrics DB connection string not set")
                 event.fail("schema migration failed: metrics database connection not set/ready")
@@ -787,12 +788,12 @@ class LivepatchCharm(CharmBase):
 
         for db_name, conn_str in targets.items():
             try:
-                self.schema_upgrade(container, conn_str)
+                self.schema_upgrade(container, db_name, conn_str)
             except Exception as e:
                 event.fail(f"schema migration failed for {db_name} database: {e}")
                 return
 
-    def schema_upgrade(self, container, conn_str):
+    def schema_upgrade(self, container, target, conn_str):
         """
         Perform a schema upgrade on the configurable database.
 
@@ -813,6 +814,8 @@ class LivepatchCharm(CharmBase):
                     "upgrade",
                     "--db",
                     conn_str,
+                    "--target",
+                    target,
                 ],
             )
         except pebble.APIError as e:
@@ -839,19 +842,35 @@ class LivepatchCharm(CharmBase):
             LOGGER.warning("State is not ready")
             return
 
-        db_uri = self._state.dsn
+        targets = self._get_schema_upgrade_targets()
         container = self.unit.get_container(SCHEMA_UPGRADE_CONTAINER)
+        db_uri = targets.get("livepatchdb")
+        if not db_uri:
+            LOGGER.error("DB connection string not set")
+            event.fail("schema migration failed: database connection not set/ready")
+            return
+        
+        if self.config.get("timescale_db.enabled"):
+            metrics_db_uri = targets.get("timescaledb")
+            if not metrics_db_uri:
+                LOGGER.error("Metrics DB connection string not set")
+                event.fail("schema migration failed: metrics database connection not set/ready")
+                return
+        
         if not container.can_connect():
-            LOGGER.error("cannot connect to the schema update container")
+            LOGGER.error("cannot connect to the schema upgrade container")
+            event.fail("schema migration failed: cannot connect to the schema upgrade container")
             return
 
-        try:
-            migration_required = self.migration_is_required(container, db_uri)
-            event.set_results({"migration-required": migration_required})
-        except Exception as e:
-            event.fail(f"schema version check failed: {e}")
+        for db_name, conn_str in targets.items():
+            try:
+                migration_required = self.migration_is_required(container, db_name,  conn_str)
+                event.set_results({f"migration-required-{db_name}": migration_required})
+            except Exception as e:
+                event.fail(f"schema version check failed for {db_name}: {e}")
+                return
 
-    def migration_is_required(self, container, conn_str: str) -> bool:
+    def migration_is_required(self, container, target, conn_str: str) -> bool:
         """Run a schema version check against the database."""
         if not container.exists("/usr/local/bin/livepatch-schema-tool"):
             LOGGER.error("livepatch-schema-tool not found in the schema upgrade container")
@@ -869,6 +888,8 @@ class LivepatchCharm(CharmBase):
                     "check",
                     "--db",
                     conn_str,
+                    "--target",
+                    target,
                 ],
             )
         except pebble.APIError as e:

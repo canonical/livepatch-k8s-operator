@@ -9,8 +9,7 @@ from unittest.mock import Mock, patch
 import pathlib
 import os
 
-from ops._private.harness import ActionFailed
-from ops.testing import Harness
+from ops.testing import Harness, ActionFailed
 
 from src.charm import LivepatchCharm
 

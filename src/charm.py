@@ -309,6 +309,11 @@ class LivepatchCharm(CharmBase):
         # remove empty environment values
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
+        # set proxy environment variables (without the LP_ prefix)
+        proxy_dict = utils.get_proxy_dict(self.config)
+        if proxy_dict:
+            env_vars.update(proxy_dict)
+
         # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
         explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL"}
         # Set keys to empty string if they are not already set.

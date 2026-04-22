@@ -1453,6 +1453,43 @@ settings:
                 },
             )
 
+    def test_proxy_env_vars_from_juju_env(self):
+        """Test that JUJU_CHARM_* proxy env vars are mapped into the pebble environment."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        juju_proxy_env = {
+            "JUJU_CHARM_HTTP_PROXY": "http://proxy.example.com:3128",
+            "JUJU_CHARM_HTTPS_PROXY": "https://proxy.example.com:3128",
+            "JUJU_CHARM_NO_PROXY": "localhost,127.0.0.1",
+        }
+        with patch.dict(os.environ, juju_proxy_env, clear=False):
+            self.start_container()
+
+        self._assert_environment_contains(
+            {
+                "http_proxy": "http://proxy.example.com:3128",
+                "https_proxy": "https://proxy.example.com:3128",
+                "no_proxy": "localhost,127.0.0.1",
+            }
+        )
+
+    def test_proxy_env_vars_absent_when_not_configured(self):
+        """Test that proxy env vars are not set when neither config nor JUJU env vars are present."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        # Ensure JUJU proxy env vars are not set
+        proxy_keys = ["JUJU_CHARM_HTTP_PROXY", "JUJU_CHARM_HTTPS_PROXY", "JUJU_CHARM_NO_PROXY"]
+        env_without_proxy = {k: "" for k in proxy_keys}
+        with patch.dict(os.environ, env_without_proxy, clear=False):
+            self.start_container()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        for key in ("http_proxy", "https_proxy", "no_proxy"):
+            self.assertNotIn(key, environment)
+
     def _assert_environment_contains(self, contains: Dict[str, Any]):
         """Assert Pebble plan environment contains given key/value pairs."""
         plan = self.harness.get_container_pebble_plan("livepatch")

@@ -92,6 +92,53 @@ options:
   auth.sso.public-key:
     description: Public key for the auth server
     type: string
+  auth.oauth.enabled:
+    default: false
+    description: |
+      Whether OAuth 2.0 bearer token authentication backed by Canonical IdP should be enabled for admin API access.
+    type: boolean
+  auth.oauth.audience:
+    description: |
+      Expected JWT audience claim value for OAuth authentication.
+    type: string
+  auth.oauth.issuer:
+    description: |
+      Expected JWT issuer claim value for OAuth authentication.
+    type: string
+  auth.oauth.sig-algs:
+    default: "RS256"
+    description: |
+      Comma separated list of accepted JWT signature algorithms.
+      Supported values: RS256, RS384, RS512, ES256, ES384, ES512.
+    type: string
+  auth.oauth.allowed-email-ids:
+    description: |
+      Comma separated list of email addresses allowed to access the admin API when OAuth is enabled.
+    type: string
+  auth.oauth.jwks.url:
+    description: |
+      URL of the JWKS endpoint used to fetch signing keys for JWT verification.
+    type: string
+  auth.oauth.jwks.refresh-interval:
+    default: "1h"
+    description: |
+      Interval for refreshing the JWKS key set.
+    type: string
+  auth.oauth.jwks.refresh-unknown-kid:
+    default: false
+    description: |
+      Refresh JWKS on-demand when a token contains an unknown key ID (kid).
+    type: boolean
+  auth.oauth.jwks.refresh-unknown-kid-limit:
+    default: "10m"
+    description: |
+      Minimum interval between on-demand JWKS refresh attempts for unknown key IDs.
+    type: string
+  auth.oauth.jwks.refresh-unknown-kid-max-wait:
+    default: "1m"
+    description: |
+      Maximum time to wait for an in-flight on-demand JWKS refresh.
+    type: string
 
   contracts.enabled:
     description: Whether use of the contracts service is enabled.

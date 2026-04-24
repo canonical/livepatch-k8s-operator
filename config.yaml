@@ -125,7 +125,7 @@ options:
       Interval for refreshing the JWKS key set.
     type: string
   auth.oauth.jwks.refresh-unknown-kid:
-    default: false
+    default: true
     description: |
       Refresh JWKS on-demand when a token contains an unknown key ID (kid).
     type: boolean

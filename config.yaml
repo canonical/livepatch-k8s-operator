@@ -139,6 +139,22 @@ options:
     description: |
       Maximum time to wait for an in-flight on-demand JWKS refresh.
     type: string
+  auth.oauth.proxy.enabled:
+    default: false
+    description: Whether or not to use proxy for requests to OAuth provider.
+    type: boolean
+  auth.oauth.proxy.http:
+    default: ""
+    description: A comma separated list HTTP proxies to query the OAuth provider.
+    type: string
+  auth.oauth.proxy.https:
+    default: ""
+    description: A comma separated list HTTPS proxies to query the OAuth provider.
+    type: string
+  auth.oauth.proxy.no-proxy:
+    default: ""
+    description: A comma separated list of domains, IP CIDRs and/or ports to block when querying the OAuth provider.
+    type: string
 
   contracts.enabled:
     description: Whether use of the contracts service is enabled.

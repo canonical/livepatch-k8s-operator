@@ -29,6 +29,8 @@ jobs:
           provider: microk8s
           microk8s-group: snap_microk8s
           microk8s-addons: "ingress storage dns rbac registry metallb:192.168.1.100-192.168.1.100"
+          # Workaround for juju 2.9.58. ref: https://github.com/juju/juju/issues/22356#issuecomment-4340119766
+          bootstrap-options: "--config caas-image-repo=ghcr.io/juju"
       # Instructions from https://microk8s.io/docs/registry-private
       # and https://github.com/containerd/cri/blob/master/docs/registry.md
       # Bash explanation https://stackoverflow.com/questions/15429330/how-to-specify-a-multi-line-shell-variable#comment21828145_15429426
@@ -158,6 +160,8 @@ jobs:
           provider: microk8s
           microk8s-group: snap_microk8s
           microk8s-addons: "ingress storage dns rbac registry metallb:192.168.1.100-192.168.1.100"
+          # Workaround for juju 2.9.58. ref: https://github.com/juju/juju/issues/22356#issuecomment-4340119766
+          bootstrap-options: "--config caas-image-repo=ghcr.io/juju"
       # Instructions from https://microk8s.io/docs/registry-private
       # and https://github.com/containerd/cri/blob/master/docs/registry.md
       # Bash explanation https://stackoverflow.com/questions/15429330/how-to-specify-a-multi-line-shell-variable#comment21828145_15429426

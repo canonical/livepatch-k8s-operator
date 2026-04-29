@@ -91,11 +91,11 @@ resources:
   livepatch-server-image:
     type: oci-image
     description: OCI Image for Livepatch Server
-    upstream-source: ghcr.io/canonical/livepatch-server:v1.21.1
+    upstream-source: ghcr.io/canonical/livepatch-server:v1.21.2
   livepatch-schema-upgrade-tool-image:
     type: oci-image
     description: OCI Image for Schema upgrade tool
-    upstream-source: ghcr.io/canonical/livepatch-server:v1.21.1
+    upstream-source: ghcr.io/canonical/livepatch-server:v1.21.2
   promtail-bin:
     type: file
     description: Promtail binary for logging

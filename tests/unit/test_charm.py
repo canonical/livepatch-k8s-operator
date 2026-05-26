@@ -16,7 +16,14 @@ from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
 
 from log_redactor import _REDACTED
-from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT, LivepatchCharm
+from src.charm import (
+    LIVEPATCH_SERVICE_NAME,
+    SCHEMA_TOOL_MAX_ATTEMPTS,
+    SERVER_PORT,
+    DeferError,
+    LivepatchCharm,
+    TransientSchemaToolError,
+)
 from src.state import State
 
 APP_NAME = "canonical-livepatch-server-k8s"
@@ -262,6 +269,122 @@ class TestCharm(unittest.TestCase):
             "schema migration failed for primary database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
 
+    @staticmethod
+    def _make_schema_container(wait_output_effects: List[Any]) -> Mock:
+        """Build a mock schema-upgrade container.
+
+        `wait_output_effects` is a list of per-attempt behaviors for
+        `process.wait_output()`. Each item is either an exception instance (to
+        raise) or a (stdout, stderr) tuple (to return).
+        """
+        container = Mock()
+        container.exists = Mock(return_value=True)
+
+        effects = iter(wait_output_effects)
+
+        def exec_side_effect(command: List[str]):
+            effect = next(effects)
+
+            def wait_output():
+                if isinstance(effect, Exception):
+                    raise effect
+                return effect
+
+            process_mock = Mock()
+            process_mock.wait_output.side_effect = wait_output
+            return process_mock
+
+        container.exec = Mock(side_effect=exec_side_effect)
+        return container
+
+    @staticmethod
+    def _transient_exec_error() -> pebble.ExecError:
+        return pebble.ExecError(
+            ["/usr/local/bin/livepatch-schema-tool"],
+            1,
+            "",
+            'ERROR: prepared statement "lrupsc_1_0" already exists (SQLSTATE 42P05)',
+        )
+
+    @patch("src.charm.time.sleep", return_value=None)
+    def test_schema_upgrade__retries_then_succeeds(self, _sleep):
+        """A transient error clears on retry and the upgrade succeeds."""
+        self.start_container()
+        container = self._make_schema_container(
+            [self._transient_exec_error(), self._transient_exec_error(), (None, None)]
+        )
+
+        # Should not raise.
+        self.harness.charm.schema_upgrade(container, "postgresql://123")
+
+        self.assertEqual(container.exec.call_count, 3)
+
+    @patch("src.charm.time.sleep", return_value=None)
+    def test_schema_upgrade__transient_exhausted_raises(self, _sleep):
+        """A persistent transient error raises TransientSchemaToolError after max attempts."""
+        self.start_container()
+        container = self._make_schema_container([self._transient_exec_error() for _ in range(SCHEMA_TOOL_MAX_ATTEMPTS)])
+
+        with self.assertRaises(TransientSchemaToolError):
+            self.harness.charm.schema_upgrade(container, "postgresql://123")
+
+        self.assertEqual(container.exec.call_count, SCHEMA_TOOL_MAX_ATTEMPTS)
+
+    @patch("src.charm.time.sleep", return_value=None)
+    def test_schema_upgrade__non_transient_raises_immediately(self, _sleep):
+        """A non-transient error is raised on the first attempt without retrying."""
+        self.start_container()
+        non_transient = pebble.ExecError(["/usr/local/bin/livepatch-schema-tool"], 1, "", "some error")
+        container = self._make_schema_container([non_transient])
+
+        with self.assertRaises(pebble.ExecError):
+            self.harness.charm.schema_upgrade(container, "postgresql://123")
+
+        self.assertEqual(container.exec.call_count, 1)
+
+    @patch("src.charm.time.sleep", return_value=None)
+    def test_migration_is_required__retries_then_returns(self, _sleep):
+        """The schema check retries transient errors then returns the result."""
+        self.start_container()
+        container = self._make_schema_container([self._transient_exec_error(), (None, None)])
+
+        self.assertFalse(self.harness.charm.migration_is_required(container, "postgresql://123"))
+        self.assertEqual(container.exec.call_count, 2)
+
+    @patch("src.charm.time.sleep", return_value=None)
+    def test_migration_is_required__exit_code_2_is_pending(self, _sleep):
+        """Exit code 2 means migrations are pending and is not retried."""
+        self.start_container()
+        pending = pebble.ExecError(["/usr/local/bin/livepatch-schema-tool"], 2, "", "pending")
+        container = self._make_schema_container([pending])
+
+        self.assertTrue(self.harness.charm.migration_is_required(container, "postgresql://123"))
+        self.assertEqual(container.exec.call_count, 1)
+
+    @patch("src.charm.time.sleep", return_value=None)
+    def test_migration_is_required__transient_exhausted_raises(self, _sleep):
+        """A persistent transient error during check raises TransientSchemaToolError."""
+        self.start_container()
+        container = self._make_schema_container([self._transient_exec_error() for _ in range(SCHEMA_TOOL_MAX_ATTEMPTS)])
+
+        with self.assertRaises(TransientSchemaToolError):
+            self.harness.charm.migration_is_required(container, "postgresql://123")
+        self.assertEqual(container.exec.call_count, SCHEMA_TOOL_MAX_ATTEMPTS)
+
+    def test_handle_schema_upgrade__transient_defers(self):
+        """handle_schema_upgrade converts a transient schema-tool error into a defer."""
+        self.start_container()
+        self.harness.charm._state.dsn = "postgresql://123"
+
+        with patch.object(
+            self.harness.charm,
+            "migration_is_required",
+            side_effect=TransientSchemaToolError("42P05"),
+        ):
+            with self.assertRaises(DeferError):
+                self.harness.charm.handle_schema_upgrade()
+
+        self.assertEqual(self.harness.charm.unit.status.name, WaitingStatus.name)
 
     def test_on_config_changed__failure__cannot_connect_to_schema_upgrade_container(self):
         """

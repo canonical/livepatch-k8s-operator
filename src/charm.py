@@ -7,6 +7,7 @@
 """Livepatch k8s charm."""
 
 import pathlib
+import time
 from base64 import b64decode
 from typing import Dict, Optional
 from urllib.parse import ParseResult, urlunparse
@@ -53,6 +54,34 @@ TRUSTED_CA_FILENAME = "/usr/local/share/ca-certificates/trusted-contracts.ca.crt
 
 class DeferError(Exception):
     """An exception that indicates the event should be deferred."""
+
+
+class TransientSchemaToolError(Exception):
+    """A schema-tool failure caused by a transient pgbouncer/pgx condition.
+
+    These errors clear once a fresh backend connection is taken from the
+    pgbouncer pool, so they should be retried (and ultimately deferred) rather
+    than treated as fatal. See:
+      - livepatch-k8s-operator#96   (prepared statement "lrupsc_*" already exists, 42P05)
+      - pgbouncer-k8s-operator#740  (DISCARD ALL cannot run inside a transaction block, 25001)
+    """
+
+
+# Substrings identifying schema-tool errors that are transient when the
+# database is reached through pgbouncer (session pooling). pgx prepares named
+# statements that collide on reused backend connections (42P05), and a
+# connection left mid-transaction trips pgbouncer's server_reset_query (25001).
+TRANSIENT_SCHEMA_TOOL_MARKERS = (
+    "SQLSTATE 42P05",
+    "already exists",
+    "SQLSTATE 25001",
+    "DISCARD ALL cannot run inside a transaction block",
+)
+# Number of times to re-run the schema tool on a transient error before giving
+# up (and deferring the hook so Juju retries later).
+SCHEMA_TOOL_MAX_ATTEMPTS = 5
+# Delay between schema-tool retries, in seconds.
+SCHEMA_TOOL_RETRY_DELAY = 3
 
 
 class LivepatchCharm(CharmBase):
@@ -259,12 +288,20 @@ class LivepatchCharm(CharmBase):
             upgrade_required = False
             try:
                 upgrade_required = self.migration_is_required(schema_container, conn_str)
+            except TransientSchemaToolError as e:
+                LOGGER.warning("transient db error while checking schema for %s, deferring: %s", db_name, e)
+                self.unit.status = WaitingStatus("Waiting for database to settle (pgbouncer)")
+                raise DeferError() from e
             except Exception as e:
                 LOGGER.error(f"Failed to determine if schema upgrade required for {db_name}: {e}")
 
             if upgrade_required:
                 try:
                     self.schema_upgrade(schema_container, conn_str)
+                except TransientSchemaToolError as e:
+                    LOGGER.warning("transient db error while upgrading schema for %s, deferring: %s", db_name, e)
+                    self.unit.status = WaitingStatus("Waiting for database to settle (pgbouncer)")
+                    raise DeferError() from e
                 except Exception as e:
                     LOGGER.error(f"Failed to perform schema upgrade for {db_name}: {e}")
 
@@ -772,7 +809,7 @@ class LivepatchCharm(CharmBase):
             LOGGER.error("DB connection string not set")
             event.fail("schema migration failed: database connection not set/ready")
             return
-        
+
         if self.config.get("timescale_db.enabled"):
             metrics_db_uri = targets.get("timescale")
             if not metrics_db_uri:
@@ -792,12 +829,23 @@ class LivepatchCharm(CharmBase):
                 event.fail(f"schema migration failed for {db_name} database: {e}")
                 return
 
+    @staticmethod
+    def _is_transient_schema_tool_error(stderr: Optional[str]) -> bool:
+        """Return True if the schema-tool stderr indicates a transient pgbouncer error."""
+        if not stderr:
+            return False
+        return any(marker in stderr for marker in TRANSIENT_SCHEMA_TOOL_MARKERS)
+
     def schema_upgrade(self, container, conn_str):
         """
         Perform a schema upgrade on the configurable database.
 
         Raise an exception if there is a failure to prevent further charm.
         hook from firing and prevent more non-leader units from upgrading.
+
+        Transient pgbouncer errors (see TRANSIENT_SCHEMA_TOOL_MARKERS) are
+        retried; if they persist a TransientSchemaToolError is raised so the
+        caller can defer rather than treat the failure as fatal.
         """
         LOGGER.info("Attempting schema upgrade")
         self.unit.status = WaitingStatus("pg connection successful, attempting upgrade")
@@ -805,32 +853,45 @@ class LivepatchCharm(CharmBase):
             LOGGER.error("livepatch-schema-tool not found in the schema upgrade container")
             raise FileNotFoundError("schema tool not found")
 
-        process = None
-        try:
-            process = container.exec(
-                command=[
-                    "/usr/local/bin/livepatch-schema-tool",
-                    "upgrade",
-                    "--db",
-                    conn_str,
-                ],
-            )
-        except pebble.APIError as e:
-            LOGGER.error(e)
-            LOGGER.error("Schema migration failed")
-            raise e
+        for attempt in range(1, SCHEMA_TOOL_MAX_ATTEMPTS + 1):
+            try:
+                process = container.exec(
+                    command=[
+                        "/usr/local/bin/livepatch-schema-tool",
+                        "upgrade",
+                        "--db",
+                        conn_str,
+                    ],
+                )
+            except pebble.APIError as e:
+                LOGGER.error(e)
+                LOGGER.error("Schema migration failed")
+                raise e
 
-        try:
-            stdout, _ = process.wait_output()
-            LOGGER.info(stdout)
-            self.unit.status = WaitingStatus("Schema migration done")
-        except pebble.ExecError as e:
-            LOGGER.error(e)
-            LOGGER.error("Exited with code %d. Stderr:", e.exit_code)
-            for line in e.stderr.splitlines():
-                LOGGER.error("    %s", line)
-            LOGGER.error("Schema migration failed - executing migration failed")
-            raise e
+            try:
+                stdout, _ = process.wait_output()
+                LOGGER.info(stdout)
+                self.unit.status = WaitingStatus("Schema migration done")
+                return
+            except pebble.ExecError as e:
+                if self._is_transient_schema_tool_error(e.stderr):
+                    if attempt < SCHEMA_TOOL_MAX_ATTEMPTS:
+                        LOGGER.warning(
+                            "transient db error during schema upgrade (attempt %d/%d), retrying in %ds",
+                            attempt,
+                            SCHEMA_TOOL_MAX_ATTEMPTS,
+                            SCHEMA_TOOL_RETRY_DELAY,
+                        )
+                        time.sleep(SCHEMA_TOOL_RETRY_DELAY)
+                        continue
+                    LOGGER.error("Schema migration still failing after %d attempts", attempt)
+                    raise TransientSchemaToolError(e.stderr) from e
+                LOGGER.error(e)
+                LOGGER.error("Exited with code %d. Stderr:", e.exit_code)
+                for line in e.stderr.splitlines():
+                    LOGGER.error("    %s", line)
+                LOGGER.error("Schema migration failed - executing migration failed")
+                raise e
 
     def schema_version_check_action(self, event: ActionEvent):
         """Check schema version action."""
@@ -861,33 +922,46 @@ class LivepatchCharm(CharmBase):
             LOGGER.error("Database connection string not found")
             raise ValueError("Database connection string is None")
 
-        process = None
-        try:
-            process = container.exec(
-                command=[
-                    "/usr/local/bin/livepatch-schema-tool",
-                    "check",
-                    "--db",
-                    conn_str,
-                ],
-            )
-        except pebble.APIError as e:
-            LOGGER.error(e)
-            raise e
+        for attempt in range(1, SCHEMA_TOOL_MAX_ATTEMPTS + 1):
+            try:
+                process = container.exec(
+                    command=[
+                        "/usr/local/bin/livepatch-schema-tool",
+                        "check",
+                        "--db",
+                        conn_str,
+                    ],
+                )
+            except pebble.APIError as e:
+                LOGGER.error(e)
+                raise e
 
-        stdout = None
-        try:
-            stdout, _ = process.wait_output()
-            LOGGER.info("Schema is up to date.")
-            LOGGER.info(stdout)
-            return False
-        except pebble.ExecError as e:
-            LOGGER.info(e.stderr)
-            if e.exit_code == 2:
-                # If command has a non-zero exit code then migrations are pending.
-                LOGGER.info("Migrations pending")
-                return True
-            raise e
+            try:
+                stdout, _ = process.wait_output()
+                LOGGER.info("Schema is up to date.")
+                LOGGER.info(stdout)
+                return False
+            except pebble.ExecError as e:
+                LOGGER.info(e.stderr)
+                if e.exit_code == 2:
+                    # If command has a non-zero exit code then migrations are pending.
+                    LOGGER.info("Migrations pending")
+                    return True
+                if self._is_transient_schema_tool_error(e.stderr):
+                    if attempt < SCHEMA_TOOL_MAX_ATTEMPTS:
+                        LOGGER.warning(
+                            "transient db error during schema check (attempt %d/%d), retrying in %ds",
+                            attempt,
+                            SCHEMA_TOOL_MAX_ATTEMPTS,
+                            SCHEMA_TOOL_RETRY_DELAY,
+                        )
+                        time.sleep(SCHEMA_TOOL_RETRY_DELAY)
+                        continue
+                    LOGGER.error("Schema check still failing after %d attempts", attempt)
+                    raise TransientSchemaToolError(e.stderr) from e
+                raise e
+        # Unreachable: the loop either returns or raises on every path.
+        raise RuntimeError("schema check retry loop exited unexpectedly")
 
     def get_resource_token_action(self, event: ActionEvent):
         """Retrieve the livepatch resource token from ua-contracts."""

@@ -3,11 +3,11 @@
 
 """Additional unit tests specifically for MetricsDB functionality."""
 
-from typing import Any, Dict
-import unittest
-from unittest.mock import Mock, patch
-import pathlib
 import os
+import pathlib
+import unittest
+from typing import Any, Dict
+from unittest.mock import Mock, patch
 
 from ops.testing import Harness
 
@@ -101,7 +101,6 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=True), patch.object(
             self.harness.charm.metrics_db, "fetch_relation_data", return_value=mock_relation_data
         ):
-
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
 
             self.assertIsNotNone(db_info)
@@ -125,7 +124,6 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=True), patch.object(
             self.harness.charm.metrics_db, "fetch_relation_data", return_value={}
         ):
-
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
             self.assertIsNone(db_info)
 
@@ -143,12 +141,16 @@ class TestMetricsDBFunctionality(unittest.TestCase):
                 self.harness.charm.handle_schema_upgrade()
 
         self.assertEqual(migration.call_count, 2)
-        self.assertEqual(migration.call_args_list[0].args[1], "postgresql://primary")
-        self.assertEqual(migration.call_args_list[1].args[1], "postgresql://timescale")
+        self.assertEqual(migration.call_args_list[0].args[1], "livepatchdb")
+        self.assertEqual(migration.call_args_list[0].args[2], "postgresql://primary")
+        self.assertEqual(migration.call_args_list[1].args[1], "timescaledb")
+        self.assertEqual(migration.call_args_list[1].args[2], "postgresql://timescale")
 
         self.assertEqual(schema_upgrade.call_count, 2)
-        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "postgresql://primary")
-        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "postgresql://timescale")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "livepatchdb")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[2], "postgresql://primary")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "timescaledb")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[2], "postgresql://timescale")
 
     def test_schema_upgrade_action_runs_for_timescale_when_enabled(self):
         """Test schema-upgrade action upgrades both primary and Timescale databases."""
@@ -164,8 +166,10 @@ class TestMetricsDBFunctionality(unittest.TestCase):
             self.harness.run_action("schema-upgrade")
 
         self.assertEqual(schema_upgrade.call_count, 2)
-        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "postgresql://primary")
-        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "postgresql://timescale")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[1], "livepatchdb")
+        self.assertEqual(schema_upgrade.call_args_list[0].args[2], "postgresql://primary")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[1], "timescaledb")
+        self.assertEqual(schema_upgrade.call_args_list[1].args[2], "postgresql://timescale")
 
     def test_metrics_db_event_handles_relation_created(self):
         """Test MetricsDB relation created event is handled properly."""
@@ -185,7 +189,7 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         )
 
         self.harness.charm._on_metrics_db_event(Mock(relation=Mock(name="metrics-db")))
-    
+
         expected_dsn = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
         self.assertEqual(self.harness.charm._state.dsn_metrics, expected_dsn)
 

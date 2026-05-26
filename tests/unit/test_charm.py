@@ -212,6 +212,8 @@ class TestCharm(unittest.TestCase):
                     "upgrade",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
             process_mock = Mock()
@@ -249,6 +251,8 @@ class TestCharm(unittest.TestCase):
                     "upgrade",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
 
@@ -266,7 +270,7 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             ex.exception.message,
-            "schema migration failed for primary database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
+            "schema migration failed for livepatchdb database: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
 
     @staticmethod
@@ -315,7 +319,7 @@ class TestCharm(unittest.TestCase):
         )
 
         # Should not raise.
-        self.harness.charm.schema_upgrade(container, "postgresql://123")
+        self.harness.charm.schema_upgrade(container, "livepatchdb", "postgresql://123")
 
         self.assertEqual(container.exec.call_count, 3)
 
@@ -326,7 +330,7 @@ class TestCharm(unittest.TestCase):
         container = self._make_schema_container([self._transient_exec_error() for _ in range(SCHEMA_TOOL_MAX_ATTEMPTS)])
 
         with self.assertRaises(TransientSchemaToolError):
-            self.harness.charm.schema_upgrade(container, "postgresql://123")
+            self.harness.charm.schema_upgrade(container, "livepatchdb", "postgresql://123")
 
         self.assertEqual(container.exec.call_count, SCHEMA_TOOL_MAX_ATTEMPTS)
 
@@ -338,7 +342,7 @@ class TestCharm(unittest.TestCase):
         container = self._make_schema_container([non_transient])
 
         with self.assertRaises(pebble.ExecError):
-            self.harness.charm.schema_upgrade(container, "postgresql://123")
+            self.harness.charm.schema_upgrade(container, "livepatchdb", "postgresql://123")
 
         self.assertEqual(container.exec.call_count, 1)
 
@@ -348,7 +352,7 @@ class TestCharm(unittest.TestCase):
         self.start_container()
         container = self._make_schema_container([self._transient_exec_error(), (None, None)])
 
-        self.assertFalse(self.harness.charm.migration_is_required(container, "postgresql://123"))
+        self.assertFalse(self.harness.charm.migration_is_required(container, "livepatchdb", "postgresql://123"))
         self.assertEqual(container.exec.call_count, 2)
 
     @patch("src.charm.time.sleep", return_value=None)
@@ -358,7 +362,7 @@ class TestCharm(unittest.TestCase):
         pending = pebble.ExecError(["/usr/local/bin/livepatch-schema-tool"], 2, "", "pending")
         container = self._make_schema_container([pending])
 
-        self.assertTrue(self.harness.charm.migration_is_required(container, "postgresql://123"))
+        self.assertTrue(self.harness.charm.migration_is_required(container, "livepatchdb", "postgresql://123"))
         self.assertEqual(container.exec.call_count, 1)
 
     @patch("src.charm.time.sleep", return_value=None)
@@ -368,7 +372,7 @@ class TestCharm(unittest.TestCase):
         container = self._make_schema_container([self._transient_exec_error() for _ in range(SCHEMA_TOOL_MAX_ATTEMPTS)])
 
         with self.assertRaises(TransientSchemaToolError):
-            self.harness.charm.migration_is_required(container, "postgresql://123")
+            self.harness.charm.migration_is_required(container, "livepatchdb", "postgresql://123")
         self.assertEqual(container.exec.call_count, SCHEMA_TOOL_MAX_ATTEMPTS)
 
     def test_handle_schema_upgrade__transient_defers(self):
@@ -463,6 +467,8 @@ class TestCharm(unittest.TestCase):
                     "check",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
             process_mock = Mock()
@@ -473,7 +479,7 @@ class TestCharm(unittest.TestCase):
 
         output = self.harness.run_action("schema-version")
 
-        self.assertEqual(output.results, {"migration-required": False})
+        self.assertEqual(output.results, {"migration-required-livepatchdb": False})
 
     def test_schema_version_action__success__migration_required(self):
         """
@@ -502,6 +508,8 @@ class TestCharm(unittest.TestCase):
                     "check",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
 
@@ -516,7 +524,7 @@ class TestCharm(unittest.TestCase):
 
         output = self.harness.run_action("schema-version")
 
-        self.assertEqual(output.results, {"migration-required": True})
+        self.assertEqual(output.results, {"migration-required-livepatchdb": True})
 
     def test_schema_version_action__failure(self):
         """Test the scenario where `schema-version` action fails."""
@@ -542,6 +550,8 @@ class TestCharm(unittest.TestCase):
                     "check",
                     "--db",
                     "postgresql://123",
+                    "--target",
+                    "livepatchdb",
                 ],
             )
 
@@ -559,7 +569,7 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             ex.exception.message,
-            "schema version check failed: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
+            "schema version check failed for livepatchdb: non-zero exit code 1 executing '/usr/local/bin/livepatch-schema-tool', stdout='', stderr='some error'",
         )
 
     def test_get_resource_token_action__success(self):

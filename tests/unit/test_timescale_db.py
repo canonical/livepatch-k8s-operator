@@ -9,7 +9,7 @@ import unittest
 from typing import Any, Dict
 from unittest.mock import Mock, patch
 
-from ops.testing import ActionFailed, Harness
+from ops.testing import Harness
 
 from src.charm import LivepatchCharm
 

@@ -9,7 +9,7 @@ import unittest
 from typing import Any, Dict
 from unittest.mock import Mock, patch
 
-from ops.testing import Harness
+from ops.testing import ActionFailed, Harness
 
 from src.charm import LivepatchCharm
 
@@ -17,6 +17,7 @@ TEST_TOKEN = "test-token"  # nosec
 APP_NAME = "canonical-livepatch-server-k8s"
 
 
+# pylint: disable=too-many-public-methods
 class TestMetricsDBFunctionality(unittest.TestCase):
     """Test MetricsDB specific functionality."""
 
@@ -200,6 +201,16 @@ class TestMetricsDBFunctionality(unittest.TestCase):
 
         metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
         self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+        self.harness.update_relation_data(
+            metrics_rel_id,
+            "postgresql",
+            {
+                "endpoints": "postgres.local:5432",
+                "username": "tsuser",
+                "password": "tspass",  # nosec B105
+            },
+        )
+        self.harness.charm._on_metrics_db_event(Mock(relation=Mock(name="metrics-db")))
 
         self.harness.update_config(
             {
@@ -215,6 +226,7 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         self._assert_environment_contains(
             {
                 "LP_TIMESCALE_DB_ENABLED": True,
+                "LP_TIMESCALE_DB_CONNECTION_STRING": "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db",
                 "LP_TIMESCALE_DB_CONNECTION_POOL_MAX": 20,
                 "LP_TIMESCALE_DB_CONNECTION_LIFETIME_MAX": "30m",
                 "LP_TIMESCALE_DB_WORK_MEM": 32,
@@ -237,7 +249,9 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("livepatch")
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
 
-        self.assertNotIn("LP_TIMESCALE_DB_CONNECTION_STRING", environment)
+        # LP_TIMESCALE_DB_CONNECTION_STRING is explicitly set to "" when no metrics-db relation exists,
+        # so that any previously set value is cleared from the Pebble layer (override: merge semantics).
+        self.assertEqual(environment.get("LP_TIMESCALE_DB_CONNECTION_STRING"), "")
 
     def test_metrics_db_event_defers_when_no_db_info(self):
         """Test MetricsDB event is deferred when database info is not available."""

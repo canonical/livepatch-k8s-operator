@@ -109,13 +109,52 @@ class TestMetricsDBFunctionality(unittest.TestCase):
             self.assertEqual(db_info["user"], "metrics_user")
             self.assertEqual(db_info["password"], "metrics_pass")
 
-    def test_get_db_info_returns_none_when_no_resource(self):
-        """Test _get_db_info returns None when database resource not created."""
-        self.harness.add_relation("metrics-db", "postgresql")
+    def test_get_db_info_with_metrics_relation_secret_user(self):
+        """Test _get_db_info reads credentials from secret-user when plain fields are absent."""
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
 
-        with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=False):
+        mock_relation_data = {
+            metrics_rel_id: {
+                "endpoints": "postgres.example.com:5432",
+                "secret-user": "secret://1234abcd/wxyz",
+            }
+        }
+        mock_secret = Mock()
+        mock_secret.get_content.return_value = {
+            "username": "metrics_user",
+            "password": "metrics_pass",  # nosec B105
+        }
+
+        with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=True), patch.object(
+            self.harness.charm.metrics_db, "fetch_relation_data", return_value=mock_relation_data
+        ), patch.object(self.harness.charm.model, "get_secret", return_value=mock_secret):
             db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
-            self.assertIsNone(db_info)
+
+            self.assertIsNotNone(db_info)
+            self.assertEqual(db_info["endpoint"], "postgres.example.com:5432")
+            self.assertEqual(db_info["user"], "metrics_user")
+            self.assertEqual(db_info["password"], "metrics_pass")
+
+    def test_get_db_info_does_not_depend_on_resource_created(self):
+        """Test _get_db_info works even if is_resource_created() is False."""
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        mock_relation_data = {
+            metrics_rel_id: {
+                "endpoints": "postgres.example.com:5432",
+                "username": "metrics_user",
+                "password": "metrics_pass",  # nosec B105
+            }
+        }
+
+        with patch.object(self.harness.charm.metrics_db, "is_resource_created", return_value=False), patch.object(
+            self.harness.charm.metrics_db, "fetch_relation_data", return_value=mock_relation_data
+        ):
+            db_info = self.harness.charm._get_db_info(self.harness.charm.metrics_db)
+            self.assertIsNotNone(db_info)
+            self.assertEqual(db_info["endpoint"], "postgres.example.com:5432")
 
     def test_get_db_info_returns_none_when_no_relation_data(self):
         """Test _get_db_info returns None when relation data is missing."""
@@ -190,6 +229,34 @@ class TestMetricsDBFunctionality(unittest.TestCase):
         )
 
         self.harness.charm._on_metrics_db_event(Mock(relation=Mock(name="metrics-db")))
+
+        expected_dsn = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
+        self.assertEqual(self.harness.charm._state.dsn_metrics, expected_dsn)
+
+    def test_metrics_db_event_handles_relation_created_with_secret_user(self):
+        """Test MetricsDB relation event handles secret-user credentials."""
+        self.harness.set_leader(True)
+        self.start_container()
+        metrics_rel_id = self.harness.add_relation("metrics-db", "postgresql")
+        self.harness.add_relation_unit(metrics_rel_id, "postgresql/0")
+
+        self.harness.update_relation_data(
+            metrics_rel_id,
+            "postgresql",
+            {
+                "endpoints": "postgres.local:5432",
+                "secret-user": "secret://1234abcd/wxyz",
+            },
+        )
+
+        mock_secret = Mock()
+        mock_secret.get_content.return_value = {
+            "username": "tsuser",
+            "password": "tspass",  # nosec B105
+        }
+
+        with patch.object(self.harness.charm.model, "get_secret", return_value=mock_secret):
+            self.harness.charm._on_metrics_db_event(Mock(relation=Mock(name="metrics-db")))
 
         expected_dsn = "postgresql://tsuser:tspass@postgres.local:5432/livepatch-metrics-db"
         self.assertEqual(self.harness.charm._state.dsn_metrics, expected_dsn)

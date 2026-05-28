@@ -9,7 +9,7 @@
 import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
-from urllib.parse import ParseResult, urlunparse
+from urllib.parse import ParseResult, urlparse, urlunparse
 
 import pgsql
 import yaml
@@ -624,8 +624,8 @@ class LivepatchCharm(CharmBase):
 
     def _get_db_info(self, db_relation) -> Optional[Dict]:
         """Get database connection info by reading relation data from a given relation object."""
-        if len(db_relation.relations) == 0 or not db_relation.is_resource_created():
-            LOGGER.debug("no (postgresql) database relation found or resource not created")
+        if len(db_relation.relations) == 0:
+            LOGGER.debug("no (postgresql) database relation found")
             return None
 
         db_relation_id = db_relation.relations[0].id
@@ -634,12 +634,49 @@ class LivepatchCharm(CharmBase):
             LOGGER.debug("no relation data found for relation %s", db_relation_id)
             return None
 
-        endpoint = relation_data.get("endpoints").split(",")[0]
+        endpoint = (relation_data.get("endpoints") or "").split(",")[0] or None
+        username = relation_data.get("username")
+        password = relation_data.get("password")
+
+        # Some providers publish credentials through Juju secrets and only keep
+        # secret references in relation data (for example: secret-user).
+        if not username or not password:
+            secret_user = relation_data.get("secret-user")
+            if secret_user:
+                secret_content = self._get_secret_content(secret_user)
+                if secret_content:
+                    username = username or secret_content.get("username") or secret_content.get("entity-name")
+                    password = password or secret_content.get("password") or secret_content.get("entity-password")
+
+                    if not endpoint:
+                        first_uri = (secret_content.get("uris") or relation_data.get("uris") or "").split(",")[0]
+                        if first_uri:
+                            parsed = urlparse(first_uri)
+                            endpoint = parsed.netloc or None
+
+        if not endpoint or not username or not password:
+            LOGGER.debug("database connection data incomplete for relation %s", db_relation_id)
+            return None
+
         return {
             "endpoint": endpoint,
-            "password": relation_data.get("password"),
-            "user": relation_data.get("username"),
+            "password": password,
+            "user": username,
         }
+
+    def _get_secret_content(self, secret_uri: str) -> Optional[Dict]:
+        """Resolve a Juju secret URI and return its latest content as a dict."""
+        if not secret_uri.startswith("secret://"):
+            LOGGER.debug("invalid secret URI %s", secret_uri)
+            return None
+
+        secret_id = secret_uri.replace("secret://", "", 1).split("/", 1)[0]
+        try:
+            secret = self.model.get_secret(id=secret_id)
+            return secret.get_content(refresh=True)
+        except Exception as exc:  # pragma: no cover - defensive against ops version differences
+            LOGGER.warning("failed to fetch relation secret %s: %s", secret_uri, exc)
+            return None
 
     def _on_metrics_db_event(self, event: RelationEvent) -> None:
         """Metrics database event handler."""

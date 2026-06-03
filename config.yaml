@@ -594,3 +594,19 @@ options:
     description: would profile separate concurrent running gorountines.
     default: false
     type: boolean
+
+  ###########
+  # Tracing #
+  ###########
+  tracing.enabled:
+    default: false
+    description: Whether to enable OpenTelemetry tracing. This is a manual toggle and is independent of any charm relation.
+    type: boolean
+  tracing.service-name:
+    default: "livepatch-server"
+    description: Service name reported in traces.
+    type: string
+  tracing.sample-rate:
+    default: 1.0
+    description: Fraction of traces to sample (0.0 to 1.0).
+    type: float

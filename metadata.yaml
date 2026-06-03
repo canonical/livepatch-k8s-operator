@@ -73,6 +73,11 @@ requires:
       limit: 1
       optional: true
 
+  send-traces:
+    interface: tracing
+    optional: true
+    limit: 1
+
   log-proxy:
     interface: loki_push_api
     optional: true

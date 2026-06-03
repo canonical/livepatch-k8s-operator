@@ -9,7 +9,7 @@
 import pathlib
 from base64 import b64decode
 from typing import Dict, Optional
-from urllib.parse import ParseResult, urlunparse
+from urllib.parse import ParseResult, urlparse, urlunparse
 
 import pgsql
 import yaml
@@ -18,6 +18,7 @@ from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.tempo_coordinator_k8s.v0.tracing import ProtocolNotRequestedError, TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
@@ -42,6 +43,7 @@ DATABASE_RELATION_LEGACY = "database-legacy"
 PRO_AIRGAPPED_SERVER_RELATION = "pro-airgapped-server"
 CVE_CATALOG_RELATION = "cve-catalog"
 METRICS_DB_RELATION = "metrics-db"
+TRACING_RELATION = "send-traces"
 
 REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
@@ -150,6 +152,15 @@ class LivepatchCharm(CharmBase):
         # Livepatch CVE service
         self.framework.observe(self.on.cve_catalog_relation_changed, self._on_cve_catalog_relation_changed)
         self.framework.observe(self.on.cve_catalog_relation_broken, self._on_cve_catalog_relation_broken)
+
+        # Tracing
+        self.tracing = TracingEndpointRequirer(
+            self,
+            relation_name=TRACING_RELATION,
+            protocols=["otlp_grpc", "otlp_http"],
+        )
+        self.framework.observe(self.tracing.on.endpoint_changed, self._on_tracing_endpoint_changed)
+        self.framework.observe(self.tracing.on.endpoint_removed, self._on_tracing_endpoint_removed)
 
         self._update_ingress_method()
 
@@ -307,6 +318,14 @@ class LivepatchCharm(CharmBase):
             )
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
+        # Tracing endpoint from relation (enabled flag is a manual config toggle, not set here).
+        tracing = self._get_tracing_endpoint()
+        if tracing:
+            endpoint, protocol, insecure = tracing
+            env_vars["LP_TRACING_OTLP_ENDPOINT"] = endpoint
+            env_vars["LP_TRACING_PROTOCOL"] = protocol
+            env_vars["LP_TRACING_INSECURE"] = insecure
+
         # remove empty environment values
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
@@ -316,7 +335,14 @@ class LivepatchCharm(CharmBase):
             env_vars.update(proxy_dict)
 
         # Keys that must be explicitly set even when empty, to override previous Pebble layer values.
-        explicit_keys = {"LP_CVE_SYNC_SOURCE_URL", "LP_LSN_SYNC_SOURCE_URL", "LP_TIMESCALE_DB_CONNECTION_STRING"}
+        explicit_keys = {
+            "LP_CVE_SYNC_SOURCE_URL",
+            "LP_LSN_SYNC_SOURCE_URL",
+            "LP_TIMESCALE_DB_CONNECTION_STRING",
+            "LP_TRACING_OTLP_ENDPOINT",
+            "LP_TRACING_PROTOCOL",
+            "LP_TRACING_INSECURE",
+        }
         # Set keys to empty string if they are not already set.
         for key in explicit_keys:
             env_vars.setdefault(key, "")
@@ -737,6 +763,36 @@ class LivepatchCharm(CharmBase):
     def _on_cve_catalog_relation_broken(self, event: RelationDepartedEvent):
         """Handle cve-catalog relation-broken event."""
         self._update_workload_container_config(event)
+
+    def _on_tracing_endpoint_changed(self, event):
+        """Handle tracing endpoint-changed event."""
+        self._update_workload_container_config(event)
+
+    def _on_tracing_endpoint_removed(self, event):
+        """Handle tracing endpoint-removed event."""
+        self._update_workload_container_config(event)
+
+    def _get_tracing_endpoint(self) -> Optional[tuple]:
+        """Return (endpoint, protocol, insecure) from the tracing relation, or None."""
+        if not self.tracing.is_ready():
+            return None
+
+        try:
+            grpc_url = self.tracing.get_endpoint("otlp_grpc")
+        except ProtocolNotRequestedError:
+            grpc_url = None
+        if grpc_url:
+            # gRPC endpoints are bare host:port; use insecure by default for in-cluster traffic.
+            return grpc_url, "grpc", True
+
+        http_url = self.tracing.get_endpoint("otlp_http")
+        if http_url:
+            parsed = urlparse(http_url)
+            endpoint = parsed.netloc
+            insecure = parsed.scheme == "http"
+            return endpoint, "http", insecure
+
+        return None
 
     def _get_available_cve_service(self) -> Optional[str]:
         """Return the Livepatch CVE service address, if any, taken from related app/unit."""

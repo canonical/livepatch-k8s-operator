@@ -785,7 +785,10 @@ class LivepatchCharm(CharmBase):
             # gRPC endpoints are bare host:port; use insecure by default for in-cluster traffic.
             return grpc_url, "grpc", True
 
-        http_url = self.tracing.get_endpoint("otlp_http")
+        try:
+            http_url = self.tracing.get_endpoint("otlp_http")
+        except ProtocolNotRequestedError:
+            http_url = None
         if http_url:
             parsed = urlparse(http_url)
             endpoint = parsed.netloc

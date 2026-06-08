@@ -28,7 +28,7 @@ jobs:
           juju-channel: 2.9/stable
           provider: microk8s
           microk8s-group: snap_microk8s
-          microk8s-addons: "ingress storage dns rbac registry metallb:192.168.1.100-192.168.1.100"
+          microk8s-addons: "ingress storage dns rbac registry"
           # Workaround for juju 2.9.58. ref: https://github.com/juju/juju/issues/22356#issuecomment-4340119766
           bootstrap-options: "--config caas-image-repo=ghcr.io/juju"
       # Instructions from https://microk8s.io/docs/registry-private

@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
+import json
 import os
 import pathlib
 import unittest
@@ -1933,3 +1934,192 @@ class TestIngressInterface(unittest.TestCase):
 
         harness.update_config({"ingress-interface": "legacy-nginx-route"})
         self.assertIsInstance(harness.charm.ingress, NginxRouteRequirer)
+
+
+class TestTracingRelation(unittest.TestCase):
+    """Tests for the send-traces (tracing) relation."""
+
+    def _start_harness(self) -> Harness:
+        """Create a started harness with peer relation and containers ready."""
+        version_file = pathlib.Path("version")
+        pathlib.Path.touch(version_file)
+        self.addCleanup(lambda: version_file.unlink(missing_ok=True))
+
+        harness = Harness(LivepatchCharm)
+        self.addCleanup(harness.cleanup)
+        harness.add_oci_resource("livepatch-server-image")
+        harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
+        harness.set_leader(True)
+        harness.begin()
+
+        rel_id = harness.add_relation("livepatch", "livepatch")
+        harness.add_relation_unit(rel_id, f"{APP_NAME}/1")
+        harness.container_pebble_ready("livepatch")
+        harness.container_pebble_ready("livepatch-schema-upgrade")
+
+        harness.charm._state.dsn = "postgresql://user:pass@host:5432/livepatch-server"
+        harness.charm._state.resource_token = TEST_TOKEN
+        return harness
+
+    def _add_tracing_relation(self, harness: Harness, receivers: list) -> int:
+        """Add and populate a send-traces relation with the given receiver list."""
+        rel_id = harness.add_relation("send-traces", "otelcol")
+        harness.add_relation_unit(rel_id, "otelcol/0")
+        harness.update_relation_data(
+            rel_id,
+            "otelcol",
+            {"receivers": json.dumps(receivers)},
+        )
+        return rel_id
+
+    def _get_environment(self, harness: Harness) -> dict:
+        plan = harness.get_container_pebble_plan("livepatch")
+        return plan.to_dict()["services"]["livepatch"]["environment"]
+
+    def test_grpc_endpoint_sets_env_vars(self):
+        """gRPC endpoint from relation populates OTLP endpoint, protocol, and insecure flag."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_tracing_relation(
+                harness,
+                [{"protocol": {"name": "otlp_grpc", "type": "grpc"}, "url": "otelcol:4317"}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_OTLP_ENDPOINT"], "otelcol:4317")
+        self.assertEqual(env["LP_TRACING_PROTOCOL"], "grpc")
+        self.assertEqual(env["LP_TRACING_INSECURE"], True)
+
+    def test_http_endpoint_fallback(self):
+        """HTTP endpoint is used when gRPC is not provided."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_tracing_relation(
+                harness,
+                [{"protocol": {"name": "otlp_http", "type": "http"}, "url": "http://otelcol:4318"}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_OTLP_ENDPOINT"], "otelcol:4318")
+        self.assertEqual(env["LP_TRACING_PROTOCOL"], "http")
+        self.assertEqual(env["LP_TRACING_INSECURE"], True)
+
+    def test_https_endpoint_sets_insecure_false(self):
+        """HTTPS HTTP endpoint sets insecure to False."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_tracing_relation(
+                harness,
+                [{"protocol": {"name": "otlp_http", "type": "http"}, "url": "https://otelcol:4318"}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_OTLP_ENDPOINT"], "otelcol:4318")
+        self.assertEqual(env["LP_TRACING_PROTOCOL"], "http")
+        self.assertEqual(env["LP_TRACING_INSECURE"], False)
+
+    def test_grpc_preferred_over_http(self):
+        """gRPC endpoint is preferred when both gRPC and HTTP are provided."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_tracing_relation(
+                harness,
+                [
+                    {"protocol": {"name": "otlp_grpc", "type": "grpc"}, "url": "otelcol:4317"},
+                    {"protocol": {"name": "otlp_http", "type": "http"}, "url": "http://otelcol:4318"},
+                ],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_PROTOCOL"], "grpc")
+
+    def test_relation_removed_clears_endpoint_vars(self):
+        """Removing the tracing relation clears the endpoint env vars."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            rel_id = self._add_tracing_relation(
+                harness,
+                [{"protocol": {"name": "otlp_grpc", "type": "grpc"}, "url": "otelcol:4317"}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_OTLP_ENDPOINT"], "otelcol:4317")
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.remove_relation(rel_id)
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_OTLP_ENDPOINT"], "")
+        self.assertEqual(env["LP_TRACING_PROTOCOL"], "")
+        self.assertEqual(env["LP_TRACING_INSECURE"], "")
+
+    def test_enabled_flag_not_set_by_relation(self):
+        """The tracing.enabled config flag is not modified by the relation."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_tracing_relation(
+                harness,
+                [{"protocol": {"name": "otlp_grpc", "type": "grpc"}, "url": "otelcol:4317"}],
+            )
+
+        env = self._get_environment(harness)
+        # LP_TRACING_ENABLED must reflect config only; relation must not override it.
+        self.assertEqual(env.get("LP_TRACING_ENABLED"), False)
+
+    def test_enabled_flag_from_config(self):
+        """LP_TRACING_ENABLED is driven by the tracing.enabled config option."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "tracing.enabled": True,
+                }
+            )
+            self._add_tracing_relation(
+                harness,
+                [{"protocol": {"name": "otlp_grpc", "type": "grpc"}, "url": "otelcol:4317"}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_ENABLED"], True)
+
+    def test_service_name_and_sample_rate_from_config(self):
+        """tracing.service-name and tracing.sample-rate are mapped from config."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "tracing.service-name": "my-livepatch",
+                    "tracing.sample-rate": 0.5,
+                }
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_TRACING_SERVICE_NAME"], "my-livepatch")
+        self.assertEqual(env["LP_TRACING_SAMPLE_RATE"], 0.5)

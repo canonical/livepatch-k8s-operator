@@ -338,7 +338,7 @@
             "uid": "${lokids}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"\\\"level\\\":\\\"error\\\"\" [$__interval]))",
+          "expr": "sum(rate({juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"(?i)(\\\"?level\\\"?[=:\\\"]{1,3}error|ERROR:)\" [$__interval]))",
           "legendFormat": "error",
           "queryType": "range",
           "refId": "A"
@@ -349,7 +349,7 @@
             "uid": "${lokids}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"\\\"level\\\":\\\"warn\" [$__interval]))",
+          "expr": "sum(rate({juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"(?i)(\\\"?level\\\"?[=:\\\"]{1,3}warn(?:ing)?|WARNING:)\" [$__interval]))",
           "legendFormat": "warn",
           "queryType": "range",
           "refId": "B"
@@ -360,7 +360,7 @@
             "uid": "${lokids}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"\\\"level\\\":\\\"info\\\"\" [$__interval]))",
+          "expr": "sum(rate({juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"(?i)\\\"?level\\\"?[=:\\\"]{1,3}info\" [$__interval]))",
           "legendFormat": "info",
           "queryType": "range",
           "refId": "C"
@@ -411,9 +411,8 @@
             "uid": "${lokids}"
           },
           "editorMode": "code",
-          "expr": "{juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"\\\"level\\\":\\\"(error|warn|fatal|panic|critical)\"",
+          "expr": "{juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"} |~ \"(?i)(\\\"?level\\\"?[=:\\\"]{1,3}(error|warn(?:ing)?|fatal|panic|critical)|(WARNING|ERROR|FATAL|PANIC|CRITICAL):)\"",
           "legendFormat": "",
-          "maxLines": 5000,
           "queryType": "range",
           "refId": "A"
         }
@@ -452,7 +451,6 @@
           "editorMode": "code",
           "expr": "{juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_application=~\"$juju_application\",juju_unit=~\"$juju_unit\"}",
           "legendFormat": "",
-          "maxLines": 5000,
           "queryType": "range",
           "refId": "A"
         }

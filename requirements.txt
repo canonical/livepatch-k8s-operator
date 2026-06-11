@@ -1,3 +1,4 @@
+charmlibs-interfaces-otlp
 cosl
 ops
 ops-lib-pgsql

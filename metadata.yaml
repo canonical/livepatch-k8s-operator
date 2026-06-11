@@ -78,6 +78,11 @@ requires:
     optional: true
     limit: 1
 
+  send-otlp:
+    interface: otlp
+    optional: true
+    limit: 1
+
   log-proxy:
     interface: loki_push_api
     optional: true

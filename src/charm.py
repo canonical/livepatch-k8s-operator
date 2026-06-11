@@ -18,6 +18,7 @@ from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charmlibs.interfaces.otlp import OtlpRequirer
 from charms.tempo_coordinator_k8s.v0.tracing import ProtocolNotRequestedError, TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
@@ -44,6 +45,7 @@ PRO_AIRGAPPED_SERVER_RELATION = "pro-airgapped-server"
 CVE_CATALOG_RELATION = "cve-catalog"
 METRICS_DB_RELATION = "metrics-db"
 TRACING_RELATION = "send-traces"
+OTEL_METRICS_RELATION = "send-otlp"
 
 REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
@@ -161,6 +163,16 @@ class LivepatchCharm(CharmBase):
         )
         self.framework.observe(self.tracing.on.endpoint_changed, self._on_tracing_endpoint_changed)
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_tracing_endpoint_removed)
+
+        # OTLP metrics
+        self.otel_metrics = OtlpRequirer(
+            self,
+            relation_name=OTEL_METRICS_RELATION,
+            protocols=["grpc", "http"],
+            telemetries=["metrics"],
+        )
+        self.framework.observe(self.on.send_otlp_relation_changed, self._on_otel_metrics_relation_changed)
+        self.framework.observe(self.on.send_otlp_relation_broken, self._on_otel_metrics_relation_broken)
 
         self._update_ingress_method()
 
@@ -326,6 +338,14 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_TRACING_PROTOCOL"] = protocol
             env_vars["LP_TRACING_INSECURE"] = insecure
 
+        # OTLP metrics endpoint from relation (enabled flag is a manual config toggle, not set here).
+        otel_metrics = self._get_otel_metrics_endpoint()
+        if otel_metrics:
+            endpoint, protocol, insecure = otel_metrics
+            env_vars["LP_OTEL_METRICS_OTLP_ENDPOINT"] = endpoint
+            env_vars["LP_OTEL_METRICS_PROTOCOL"] = protocol
+            env_vars["LP_OTEL_METRICS_INSECURE"] = insecure
+
         # remove empty environment values
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
@@ -342,6 +362,9 @@ class LivepatchCharm(CharmBase):
             "LP_TRACING_OTLP_ENDPOINT",
             "LP_TRACING_PROTOCOL",
             "LP_TRACING_INSECURE",
+            "LP_OTEL_METRICS_OTLP_ENDPOINT",
+            "LP_OTEL_METRICS_PROTOCOL",
+            "LP_OTEL_METRICS_INSECURE",
         }
         # Set keys to empty string if they are not already set.
         for key in explicit_keys:
@@ -771,6 +794,25 @@ class LivepatchCharm(CharmBase):
     def _on_tracing_endpoint_removed(self, event):
         """Handle tracing endpoint-removed event."""
         self._update_workload_container_config(event)
+
+    def _on_otel_metrics_relation_changed(self, event):
+        """Handle send-otlp relation-changed event."""
+        self._update_workload_container_config(event)
+
+    def _on_otel_metrics_relation_broken(self, event):
+        """Handle send-otlp relation-broken event."""
+        self._update_workload_container_config(event)
+
+    def _get_otel_metrics_endpoint(self) -> Optional[tuple]:
+        """Return (endpoint, protocol, insecure) from the send-otlp relation, or None."""
+        endpoints = self.otel_metrics.endpoints
+        if not endpoints:
+            return None
+        otlp = next(iter(endpoints.values()))
+        # Use urlparse to extract bare host:port, consistent with how tracing does it.
+        raw = otlp.endpoint
+        host_port = urlparse(raw).netloc or raw
+        return host_port, otlp.protocol, otlp.insecure
 
     def _get_tracing_endpoint(self) -> Optional[tuple]:
         """Return (endpoint, protocol, insecure) from the tracing relation, or None."""

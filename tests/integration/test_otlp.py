@@ -100,8 +100,8 @@ async def test_otel_metrics_enabled_flag_is_independent(ops_test: OpsTest):
 
     # The relation being present must NOT auto-enable exporting; the operator
     # must explicitly set otel-metrics.enabled=true.
-    assert env.get("LP_OTEL_METRICS_ENABLED") is not True, (
-        "LP_OTEL_METRICS_ENABLED should not be set to True by the relation alone"
+    assert env.get("LP_OTEL_METRICS_ENABLED") != "true", (
+        "LP_OTEL_METRICS_ENABLED should not be set to 'true' by the relation alone"
     )
 
 
@@ -119,8 +119,8 @@ async def test_otel_metrics_enabled_via_config(ops_test: OpsTest):
         )
 
     env = await _get_pebble_env(ops_test)
-    assert env.get("LP_OTEL_METRICS_ENABLED") is True, (
-        "LP_OTEL_METRICS_ENABLED should be True after setting otel-metrics.enabled config"
+    assert env.get("LP_OTEL_METRICS_ENABLED") == "true", (
+        "LP_OTEL_METRICS_ENABLED should be 'true' after setting otel-metrics.enabled config"
     )
 
     # Reset for subsequent tests.

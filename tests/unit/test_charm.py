@@ -2123,3 +2123,191 @@ class TestTracingRelation(unittest.TestCase):
         env = self._get_environment(harness)
         self.assertEqual(env["LP_TRACING_SERVICE_NAME"], "my-livepatch")
         self.assertEqual(env["LP_TRACING_SAMPLE_RATE"], 0.5)
+
+
+class TestOtelMetricsRelation(unittest.TestCase):
+    """Tests for the send-otlp (OTLP metrics) relation."""
+
+    def _start_harness(self) -> Harness:
+        """Create a started harness with peer relation and containers ready."""
+        version_file = pathlib.Path("version")
+        pathlib.Path.touch(version_file)
+        self.addCleanup(lambda: version_file.unlink(missing_ok=True))
+
+        harness = Harness(LivepatchCharm)
+        self.addCleanup(harness.cleanup)
+        harness.add_oci_resource("livepatch-server-image")
+        harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
+        harness.set_leader(True)
+        harness.begin()
+
+        rel_id = harness.add_relation("livepatch", "livepatch")
+        harness.add_relation_unit(rel_id, f"{APP_NAME}/1")
+        harness.container_pebble_ready("livepatch")
+        harness.container_pebble_ready("livepatch-schema-upgrade")
+
+        harness.charm._state.dsn = "postgresql://user:pass@host:5432/livepatch-server"
+        harness.charm._state.resource_token = TEST_TOKEN
+        return harness
+
+    def _add_send_otlp_relation(self, harness: Harness, endpoints: list) -> int:
+        """Add and populate a send-otlp relation with the given endpoints list."""
+        rel_id = harness.add_relation("send-otlp", "otelcol")
+        harness.add_relation_unit(rel_id, "otelcol/0")
+        harness.update_relation_data(
+            rel_id,
+            "otelcol",
+            {"endpoints": json.dumps(endpoints)},
+        )
+        return rel_id
+
+    def _get_environment(self, harness: Harness) -> dict:
+        plan = harness.get_container_pebble_plan("livepatch")
+        return plan.to_dict()["services"]["livepatch"]["environment"]
+
+    def test_grpc_endpoint_sets_env_vars(self):
+        """gRPC endpoint from relation populates OTLP metrics endpoint, protocol, and insecure flag."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_send_otlp_relation(
+                harness,
+                [{"protocol": "grpc", "endpoint": "otelcol:4317", "telemetries": ["metrics"], "insecure": True}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_OTLP_ENDPOINT"], "otelcol:4317")
+        self.assertEqual(env["LP_OTEL_METRICS_PROTOCOL"], "grpc")
+        self.assertEqual(env["LP_OTEL_METRICS_INSECURE"], True)
+
+    def test_http_endpoint_strips_scheme(self):
+        """HTTP endpoint scheme is stripped so the workload receives bare host:port."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_send_otlp_relation(
+                harness,
+                [{"protocol": "http", "endpoint": "http://otelcol:4318", "telemetries": ["metrics"], "insecure": True}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_OTLP_ENDPOINT"], "otelcol:4318")
+        self.assertEqual(env["LP_OTEL_METRICS_PROTOCOL"], "http")
+        self.assertEqual(env["LP_OTEL_METRICS_INSECURE"], True)
+
+    def test_insecure_false_from_relation(self):
+        """insecure=false from the relation propagates as INSECURE=False."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_send_otlp_relation(
+                harness,
+                [{"protocol": "http", "endpoint": "https://otelcol:4318", "telemetries": ["metrics"], "insecure": False}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_INSECURE"], False)
+
+    def test_grpc_preferred_over_http(self):
+        """When provider offers both gRPC and HTTP, gRPC is selected."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_send_otlp_relation(
+                harness,
+                [
+                    {"protocol": "grpc", "endpoint": "otelcol:4317", "telemetries": ["metrics"], "insecure": True},
+                    {"protocol": "http", "endpoint": "http://otelcol:4318", "telemetries": ["metrics"], "insecure": True},
+                ],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_PROTOCOL"], "grpc")
+
+    def test_relation_removed_clears_endpoint_vars(self):
+        """Removing the send-otlp relation clears the OTLP metrics endpoint env vars."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            rel_id = self._add_send_otlp_relation(
+                harness,
+                [{"protocol": "grpc", "endpoint": "otelcol:4317", "telemetries": ["metrics"], "insecure": True}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_OTLP_ENDPOINT"], "otelcol:4317")
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.remove_relation(rel_id)
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_OTLP_ENDPOINT"], "")
+        self.assertEqual(env["LP_OTEL_METRICS_PROTOCOL"], "")
+        self.assertEqual(env["LP_OTEL_METRICS_INSECURE"], "")
+
+    def test_enabled_flag_not_set_by_relation(self):
+        """LP_OTEL_METRICS_ENABLED is not modified by the relation — it reflects config only."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
+            self._add_send_otlp_relation(
+                harness,
+                [{"protocol": "grpc", "endpoint": "otelcol:4317", "telemetries": ["metrics"], "insecure": True}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env.get("LP_OTEL_METRICS_ENABLED"), False)
+
+    def test_enabled_flag_from_config(self):
+        """LP_OTEL_METRICS_ENABLED is driven by the otel-metrics.enabled config option."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "otel-metrics.enabled": True,
+                }
+            )
+            self._add_send_otlp_relation(
+                harness,
+                [{"protocol": "grpc", "endpoint": "otelcol:4317", "telemetries": ["metrics"], "insecure": True}],
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_ENABLED"], True)
+
+    def test_service_name_interval_timeout_from_config(self):
+        """otel-metrics.service-name, export-interval, export-timeout are mapped from config."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "otel-metrics.service-name": "my-livepatch",
+                    "otel-metrics.export-interval": "30s",
+                    "otel-metrics.export-timeout": "10s",
+                }
+            )
+
+        env = self._get_environment(harness)
+        self.assertEqual(env["LP_OTEL_METRICS_SERVICE_NAME"], "my-livepatch")
+        self.assertEqual(env["LP_OTEL_METRICS_EXPORT_INTERVAL"], "30s")
+        self.assertEqual(env["LP_OTEL_METRICS_EXPORT_TIMEOUT"], "10s")

@@ -1,4 +1,4 @@
-charmlibs-interfaces-otlp
+charmlibs-interfaces-otlp==0.5.0
 cosl
 ops
 ops-lib-pgsql

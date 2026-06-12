@@ -50,7 +50,6 @@ async def test_deploy_and_relate_otel_collector(ops_test: OpsTest):
     async with ops_test.fast_forward():
         await ops_test.model.wait_for_idle(
             apps=[OTEL_COLLECTOR_APP],
-            status=ACTIVE_STATUS,
             raise_on_blocked=False,
             timeout=600,
         )

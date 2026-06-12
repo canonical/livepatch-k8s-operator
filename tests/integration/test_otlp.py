@@ -54,16 +54,16 @@ async def test_deploy_and_relate_otel_collector(ops_test: OpsTest):
             timeout=600,
         )
 
-        await ops_test.model.relate(
-            f"{APP_NAME}:{LIVEPATCH_SEND_OTLP_ENDPOINT}",
-            f"{OTEL_COLLECTOR_APP}:{COLLECTOR_RECEIVE_OTLP_ENDPOINT}",
-        )
+    await ops_test.model.relate(
+        f"{APP_NAME}:{LIVEPATCH_SEND_OTLP_ENDPOINT}",
+        f"{OTEL_COLLECTOR_APP}:{COLLECTOR_RECEIVE_OTLP_ENDPOINT}",
+    )
 
-        await ops_test.model.wait_for_idle(
-            apps=[APP_NAME, OTEL_COLLECTOR_APP],
-            status=ACTIVE_STATUS,
-            timeout=300,
-        )
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME, OTEL_COLLECTOR_APP],
+        status=ACTIVE_STATUS,
+        timeout=300,
+    )
 
     status = await ops_test.model.get_status()
     assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS

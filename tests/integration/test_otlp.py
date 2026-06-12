@@ -59,15 +59,17 @@ async def test_deploy_and_relate_otel_collector(ops_test: OpsTest):
         f"{OTEL_COLLECTOR_APP}:{COLLECTOR_RECEIVE_OTLP_ENDPOINT}",
     )
 
+    # The collector requires at least one output sink (send-remote-write, send-loki-logs, etc.)
+    # to build a valid OTel pipeline.  Deployed standalone here it will go blocked after
+    # the receive-otlp relation is created.
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME, OTEL_COLLECTOR_APP],
-        status=ACTIVE_STATUS,
+        raise_on_blocked=False,
         timeout=300,
     )
 
     status = await ops_test.model.get_status()
     assert status["applications"][APP_NAME]["status"].status == ACTIVE_STATUS
-    assert status["applications"][OTEL_COLLECTOR_APP]["status"].status == ACTIVE_STATUS
 
 
 @pytest.mark.asyncio

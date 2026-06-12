@@ -2138,9 +2138,6 @@ class TestOtelMetricsRelation(unittest.TestCase):
         self.addCleanup(harness.cleanup)
         harness.add_oci_resource("livepatch-server-image")
         harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
-        # Must be called before begin() so that JujuTopology (captured inside
-        # OtlpRequirer.__init__) gets a non-None model name for publish().
-        harness.set_model_name("test-model")
         harness.set_leader(True)
         harness.begin()
 
@@ -2167,19 +2164,6 @@ class TestOtelMetricsRelation(unittest.TestCase):
     def _get_environment(self, harness: Harness) -> dict:
         plan = harness.get_container_pebble_plan("livepatch")
         return plan.to_dict()["services"]["livepatch"]["environment"]
-
-    def test_relation_created_publishes_requirer_app_data(self):
-        """Creating the relation publishes the requirer metadata for the provider."""
-        harness = self._start_harness()
-        harness.enable_hooks()
-
-        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
-            harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
-            rel_id = harness.add_relation("send-otlp", "otelcol")
-
-        data = harness.get_relation_data(rel_id, APP_NAME)
-        self.assertIn("metadata", data)
-        self.assertIn("rules", data)
 
     def test_grpc_endpoint_sets_env_vars(self):
         """gRPC endpoint from relation populates OTLP metrics endpoint, protocol, and insecure flag."""

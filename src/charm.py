@@ -171,7 +171,6 @@ class LivepatchCharm(CharmBase):
             protocols=["grpc", "http"],
             telemetries=["metrics"],
         )
-        self.framework.observe(self.on.send_otlp_relation_created, self._on_otel_metrics_relation_changed)
         self.framework.observe(self.on.send_otlp_relation_changed, self._on_otel_metrics_relation_changed)
         self.framework.observe(self.on.send_otlp_relation_broken, self._on_otel_metrics_relation_broken)
 
@@ -798,12 +797,6 @@ class LivepatchCharm(CharmBase):
 
     def _on_otel_metrics_relation_changed(self, event):
         """Handle send-otlp relation events."""
-        # publish() writes the requirer's topology metadata and alert rules to the
-        # relation app databag.  The OtlpProvider (opentelemetry-collector-k8s) skips
-        # any relation whose remote app databag is empty, treating it as "not yet
-        # initialised".  Without this call the collector never sees a valid requirer
-        # and stays in blocked status even though the Juju relation is connected.
-        self.otel_metrics.publish()
         self._update_workload_container_config(event)
 
     def _on_otel_metrics_relation_broken(self, event):

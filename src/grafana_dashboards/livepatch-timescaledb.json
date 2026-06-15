@@ -1454,7 +1454,7 @@
   "timepicker": {},
   "timezone": "",
   "title": "Livepatch TimescaleDB",
-  "uid": "livepatch-timescaledb",
-  "version": 2,
+  "uid": null,
+  "version": 1,
   "weekStart": ""
 }

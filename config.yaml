@@ -610,3 +610,23 @@ options:
     default: 1.0
     description: Fraction of traces to sample (0.0 to 1.0).
     type: float
+
+  ################
+  # OTLP Metrics #
+  ################
+  otel-metrics.enabled:
+    default: false
+    description: Whether to enable OpenTelemetry metrics export. This is a manual toggle and is independent of any charm relation.
+    type: boolean
+  otel-metrics.service-name:
+    default: "livepatch-server"
+    description: Service name reported in OTLP metrics.
+    type: string
+  otel-metrics.export-interval:
+    default: "60s"
+    description: How often metrics are exported (e.g. "60s", "1m").
+    type: string
+  otel-metrics.export-timeout:
+    default: "30s"
+    description: Timeout for each metrics export attempt (e.g. "30s").
+    type: string

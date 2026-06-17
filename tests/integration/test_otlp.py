@@ -100,7 +100,7 @@ async def test_otel_metrics_enabled_flag_is_independent(ops_test: OpsTest):
 
     # The relation being present must NOT auto-enable exporting; the operator
     # must explicitly set otel-metrics.enabled=true.
-    assert env.get("LP_OTEL_METRICS_ENABLED") != "true", (
+    assert env.get("LP_OTEL_METRICS_ENABLED") == "false", (
         "LP_OTEL_METRICS_ENABLED should not be set to 'true' by the relation alone"
     )
 

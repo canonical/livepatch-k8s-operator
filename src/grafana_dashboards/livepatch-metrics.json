@@ -2537,7 +2537,8 @@
   "refresh": "30s",
   "schemaVersion": 41,
   "tags": [
-    "charm: opentelemetry-collector-k8s"
+    "livepatch",
+    "livepatch-metrics"
   ],
   "templating": {
     "list": [

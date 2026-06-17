@@ -1375,7 +1375,7 @@
   "style": "dark",
   "tags": [
     "livepatch",
-    "timescaledb"
+    "livepatch-timescaledb"
   ],
   "templating": {
     "list": [

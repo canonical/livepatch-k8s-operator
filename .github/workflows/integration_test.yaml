@@ -22,7 +22,7 @@ jobs:
         run: sudo charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
+        uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
           channel: 1.30-strict/stable
           juju-channel: 2.9/stable
@@ -50,7 +50,7 @@ jobs:
         run: tox -e integration
       - name: Dump logs
         if: failure()
-        uses: canonical/charming-actions/dump-logs@main
+        uses: canonical/charming-actions/dump-logs@9180b22741d2349858e35e1dcc2fe4e11c3ebf2d
         
   integration-test-metrics-db:
     name: TimescaleDB Integration tests (MicroK8s controller)
@@ -63,7 +63,7 @@ jobs:
       - name: Build charm
         run: sudo charmcraft pack --destructive-mode --verbosity=trace
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
+        uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
           channel: 1.30-strict/stable
           juju-channel: 3.6/stable
@@ -94,7 +94,7 @@ jobs:
         run: tox -e integration-metricsdb
       - name: Dump logs
         if: failure()
-        uses: canonical/charming-actions/dump-logs@main
+        uses: canonical/charming-actions/dump-logs@9180b22741d2349858e35e1dcc2fe4e11c3ebf2d
 
   integration-test-ingress:
     name: Ingress integration tests (MicroK8s controller)
@@ -111,7 +111,7 @@ jobs:
       - name: Build charm
         run: sudo charmcraft pack --destructive-mode --verbosity=trace
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
+        uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
           # our ingress tests use nginx and gateway-api-integrator (the latter needs juju 3.6)
           channel: 1.35-strict/stable
@@ -134,7 +134,7 @@ jobs:
         run: tox -e integration-ingress
       - name: Dump logs
         if: failure()
-        uses: canonical/charming-actions/dump-logs@main
+        uses: canonical/charming-actions/dump-logs@9180b22741d2349858e35e1dcc2fe4e11c3ebf2d
 
   integration-test-otlp:
     name: OpenTelemetry Collector integration tests (MicroK8s controller)
@@ -147,7 +147,7 @@ jobs:
       - name: Build charm
         run: sudo charmcraft pack --destructive-mode --verbosity=trace
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
+        uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
           channel: 1.35-strict/stable
           juju-channel: 3.6/stable
@@ -169,7 +169,7 @@ jobs:
         run: tox -e integration-otlp
       - name: Dump logs
         if: failure()
-        uses: canonical/charming-actions/dump-logs@main
+        uses: canonical/charming-actions/dump-logs@9180b22741d2349858e35e1dcc2fe4e11c3ebf2d
 
   integration-test-airgapped:
     name: Airgapped integration tests (LXD controller)
@@ -188,7 +188,7 @@ jobs:
         run: sudo charmcraft pack --destructive-mode --verbosity=trace
 
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
+        uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
           channel: 1.30-strict/stable
           juju-channel: 2.9/stable
@@ -236,4 +236,4 @@ jobs:
         run: tox -e integration-airgapped
       - name: Dump logs
         if: failure()
-        uses: canonical/charming-actions/dump-logs@main
+        uses: canonical/charming-actions/dump-logs@9180b22741d2349858e35e1dcc2fe4e11c3ebf2d

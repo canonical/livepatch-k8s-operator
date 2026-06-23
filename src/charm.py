@@ -13,6 +13,7 @@ from urllib.parse import ParseResult, urlparse, urlunparse
 
 import pgsql
 import yaml
+from charmlibs.interfaces.otlp import OtlpRequirer, RuleStore
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
@@ -20,6 +21,7 @@ from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.tempo_coordinator_k8s.v0.tracing import ProtocolNotRequestedError, TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
+from cosl.juju_topology import JujuTopology
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
@@ -37,6 +39,7 @@ METRICS_DB_NAME = "livepatch-metrics-db"
 LOG_FILE = "/var/log/livepatch"
 LOGROTATE_CONFIG_PATH = "/etc/logrotate.d/livepatch"
 LIVEPATCH_SERVICE_NAME = "livepatch"
+PROMETHEUS_ALERT_RULES_PATH = pathlib.Path(__file__).parent / "prometheus_alert_rules"
 
 DATABASE_RELATION = "database"
 DATABASE_RELATION_LEGACY = "database-legacy"
@@ -161,6 +164,20 @@ class LivepatchCharm(CharmBase):
         )
         self.framework.observe(self.tracing.on.endpoint_changed, self._on_tracing_endpoint_changed)
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_tracing_endpoint_removed)
+
+        # OTLP metrics
+        otel_metrics_rules = RuleStore(JujuTopology.from_charm(self))
+        otel_metrics_rules.add_promql_path(PROMETHEUS_ALERT_RULES_PATH)
+        self.otel_metrics = OtlpRequirer(
+            self,
+            relation_name=OTEL_METRICS_RELATION,
+            protocols=["grpc", "http"],
+            telemetries=["metrics"],
+            rules=otel_metrics_rules,
+        )
+        self.framework.observe(self.on.send_otlp_relation_created, self._on_otel_metrics_relation_created)
+        self.framework.observe(self.on.send_otlp_relation_changed, self._on_otel_metrics_relation_changed)
+        self.framework.observe(self.on.send_otlp_relation_broken, self._on_otel_metrics_relation_broken)
 
         self._update_ingress_method()
 
@@ -771,6 +788,30 @@ class LivepatchCharm(CharmBase):
     def _on_tracing_endpoint_removed(self, event):
         """Handle tracing endpoint-removed event."""
         self._update_workload_container_config(event)
+
+    def _on_otel_metrics_relation_created(self, event):
+        """Handle send-otlp relation-created event by publishing alert rules."""
+        self.otel_metrics.publish()
+
+    def _on_otel_metrics_relation_changed(self, event):
+        """Handle send-otlp relation events."""
+        self.otel_metrics.publish()
+        self._update_workload_container_config(event)
+
+    def _on_otel_metrics_relation_broken(self, event):
+        """Handle send-otlp relation-broken event."""
+        self._update_workload_container_config(event)
+
+    def _get_otel_metrics_endpoint(self) -> Optional[tuple]:
+        """Return (endpoint, protocol, insecure) from the send-otlp relation, or None."""
+        endpoints = self.otel_metrics.endpoints
+        if not endpoints:
+            return None
+        otlp = next(iter(endpoints.values()))
+        # Use urlparse to extract bare host:port, consistent with how tracing does it.
+        raw = otlp.endpoint
+        host_port = urlparse(raw).netloc or raw
+        return host_port, otlp.protocol, otlp.insecure
 
     def _get_tracing_endpoint(self) -> Optional[tuple]:
         """Return (endpoint, protocol, insecure) from the tracing relation, or None."""

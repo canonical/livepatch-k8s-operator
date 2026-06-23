@@ -1,0 +1,95 @@
+groups:
+  - name: livepatch_server_alerts
+    rules:
+      - alert: LivepatchDatabaseResponseTimeHigh
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum(rate(livepatch_server_database_query_duration_seconds_bucket{method!~"^KPI.*"}[10m])) by (le, method)
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: High database query latency (p95 above 5s)
+          description: >
+            The 95th percentile Livepatch database query duration has exceeded 5 seconds
+            for more than 10 minutes (method {{ $labels.method }}, current value
+            {{ $value | humanizeDuration }}).
+
+      - alert: LivepatchDatabaseErrorsHigh
+        expr: sum(rate(livepatch_server_database_error_count[5m])) > 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Elevated database error rate
+          description: >
+            Livepatch is reporting a rising rate of database errors
+            (current value {{ $value | printf "%.2f" }} errors/s over the last 5 minutes).
+
+      - alert: LivepatchEndpointLatencyHigh
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum(rate(livepatch_server_http_request_duration_seconds_bucket[10m])) by (le, handler)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High HTTP endpoint latency (p95 above 5s)
+          description: >
+            The 95th percentile Livepatch HTTP request duration has exceeded 5 seconds
+            for more than 5 minutes (handler {{ $labels.handler }}, current value
+            {{ $value | humanizeDuration }}).
+
+      - alert: LivepatchContractsServerErrorsHigh
+        expr: sum(increase(livepatch_server_contracts_server_error_count[10m])) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Elevated UA-Contracts server errors
+          description: >
+            Livepatch received more than 10 server errors from UA-Contracts in the last
+            10 minutes (current value {{ $value | printf "%.0f" }}). This may indicate
+            slowness, a network outage, or connectivity issues between Livepatch and
+            UA-Contracts.
+
+      - alert: LivepatchContractsTokenErrorsHigh
+        expr: sum(increase(livepatch_server_contracts_token_error_count[10m])) > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Elevated UA-Contracts invalid token errors
+          description: >
+            Livepatch received more than 500 invalid token errors from UA-Contracts in the
+            last 10 minutes (current value {{ $value | printf "%.0f" }}). This usually
+            indicates customer subscription issues or the expected consequence of a customer
+            key rotation in UA-Contracts.
+
+      - alert: LivepatchTimescaleDBWriteErrorsHigh
+        expr: sum(increase(livepatch_server_timescaledb_write_errors_total[10m])) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Elevated TimescaleDB write errors
+          description: >
+            Livepatch reported more than 10 TimescaleDB write errors in the last 10 minutes
+            (current value {{ $value | printf "%.0f" }}). Livepatch may be unable to write to the TimescaleDB, 
+            which could indicate that the TimescaleDB is not running, or that the Livepatch server is unable to connect to it.
+            Look at the Livepatch server logs for more nformation.
+
+      - alert: LivepatchTimescaleDBNullStore
+        expr: livepatch_server_timescaledb_null_store == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: TimescaleDB store is null
+          description: >
+            The Livepatch server TimescaleDB is null. This could indicate that the TimescaleDB is not running, 
+            or that the Livepatch server is unable to connect to it. Look at the Livepatch server logs for more information.

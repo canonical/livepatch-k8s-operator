@@ -19,6 +19,7 @@ from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charmlibs.interfaces.otlp import OtlpRequirer
 from charms.tempo_coordinator_k8s.v0.tracing import ProtocolNotRequestedError, TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from cosl.juju_topology import JujuTopology
@@ -47,6 +48,7 @@ PRO_AIRGAPPED_SERVER_RELATION = "pro-airgapped-server"
 CVE_CATALOG_RELATION = "cve-catalog"
 METRICS_DB_RELATION = "metrics-db"
 TRACING_RELATION = "send-traces"
+OTEL_METRICS_RELATION = "send-otlp"
 
 REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
@@ -343,6 +345,14 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_TRACING_PROTOCOL"] = protocol
             env_vars["LP_TRACING_INSECURE"] = insecure
 
+        # OTLP metrics endpoint from relation (enabled flag is a manual config toggle, not set here).
+        otel_metrics = self._get_otel_metrics_endpoint()
+        if otel_metrics:
+            endpoint, protocol, insecure = otel_metrics
+            env_vars["LP_OTEL_METRICS_OTLP_ENDPOINT"] = endpoint
+            env_vars["LP_OTEL_METRICS_PROTOCOL"] = protocol
+            env_vars["LP_OTEL_METRICS_INSECURE"] = insecure
+
         # remove empty environment values
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
@@ -359,6 +369,9 @@ class LivepatchCharm(CharmBase):
             "LP_TRACING_OTLP_ENDPOINT",
             "LP_TRACING_PROTOCOL",
             "LP_TRACING_INSECURE",
+            "LP_OTEL_METRICS_OTLP_ENDPOINT",
+            "LP_OTEL_METRICS_PROTOCOL",
+            "LP_OTEL_METRICS_INSECURE",
         }
         # Set keys to empty string if they are not already set.
         for key in explicit_keys:

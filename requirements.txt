@@ -1,4 +1,5 @@
-cosl
+charmlibs-interfaces-otlp==0.5.0
+cosl==1.9.1
 ops
 ops-lib-pgsql
 requests

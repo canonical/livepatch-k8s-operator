@@ -40,6 +40,7 @@ EXPECTED_PROMETHEUS_ALERTS = {
     "LivepatchContractsTokenErrorsHigh",
     "LivepatchTimescaleDBWriteErrorsHigh",
     "LivepatchTimescaleDBNullStore",
+    "LivepatchPingErrSpikeHigh",
 }
 
 

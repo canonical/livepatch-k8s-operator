@@ -12,71 +12,6 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${prometheusds}"
-        },
-        "enable": true,
-        "expr": "ALERTS{alertname=\"LivepatchDatabaseResponseTimeHigh\",alertstate=\"firing\"}",
-        "hide": false,
-        "iconColor": "orange",
-        "name": "LivepatchDatabaseResponseTimeHigh",
-        "step": "60s",
-        "titleFormat": "{{alertname}} firing"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${prometheusds}"
-        },
-        "enable": true,
-        "expr": "ALERTS{alertname=\"LivepatchDatabaseErrorsHigh\",alertstate=\"firing\"}",
-        "hide": false,
-        "iconColor": "red",
-        "name": "LivepatchDatabaseErrorsHigh",
-        "step": "60s",
-        "titleFormat": "{{alertname}} firing"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${prometheusds}"
-        },
-        "enable": true,
-        "expr": "ALERTS{alertname=\"LivepatchEndpointLatencyHigh\",alertstate=\"firing\"}",
-        "hide": false,
-        "iconColor": "orange",
-        "name": "LivepatchEndpointLatencyHigh",
-        "step": "60s",
-        "titleFormat": "{{alertname}} firing"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${prometheusds}"
-        },
-        "enable": true,
-        "expr": "ALERTS{alertname=\"LivepatchContractsServerErrorsHigh\",alertstate=\"firing\"}",
-        "hide": false,
-        "iconColor": "orange",
-        "name": "LivepatchContractsServerErrorsHigh",
-        "step": "60s",
-        "titleFormat": "{{alertname}} firing"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${prometheusds}"
-        },
-        "enable": true,
-        "expr": "ALERTS{alertname=\"LivepatchContractsTokenErrorsHigh\",alertstate=\"firing\"}",
-        "hide": false,
-        "iconColor": "orange",
-        "name": "LivepatchContractsTokenErrorsHigh",
-        "step": "60s",
-        "titleFormat": "{{alertname}} firing"
       }
     ]
   },
@@ -185,7 +120,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "ALERTS{alertname=~\"Livepatch.*\"}",
+          "expr": "ALERTS{alertname=~\"Livepatch.*\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}",
           "legendFormat": "{{alertname}}",
           "range": true,
           "refId": "A"
@@ -293,7 +228,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(livepatch_server_database_query_duration_seconds_bucket{method!~\"^KPI.*\"}[$__rate_interval])) by (le, method))",
+          "expr": "histogram_quantile(0.95, sum(rate(livepatch_server_database_query_duration_seconds_bucket{method!~\"^KPI.*\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval])) by (le, method))",
           "legendFormat": "{{method}}",
           "range": true,
           "refId": "A"
@@ -388,7 +323,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(livepatch_server_database_error_count[$__rate_interval]))",
+          "expr": "sum(rate(livepatch_server_database_error_count{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "legendFormat": "errors/s",
           "range": true,
           "refId": "A"
@@ -496,7 +431,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(livepatch_server_http_request_duration_seconds_bucket[$__rate_interval])) by (le, handler))",
+          "expr": "histogram_quantile(0.95, sum(rate(livepatch_server_http_request_duration_seconds_bucket{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval])) by (le, handler))",
           "legendFormat": "{{handler}}",
           "range": true,
           "refId": "A"
@@ -587,7 +522,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(livepatch_server_httpgovernor_request_overload[$__rate_interval]))",
+          "expr": "sum(rate(livepatch_server_httpgovernor_request_overload{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "legendFormat": "Requests Dropped",
           "range": true,
           "refId": "A"
@@ -695,7 +630,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(livepatch_server_contracts_server_error_count[10m]))",
+          "expr": "sum(increase(livepatch_server_contracts_server_error_count{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[10m]))",
           "legendFormat": "Server Errors",
           "range": true,
           "refId": "A"
@@ -790,7 +725,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(livepatch_server_contracts_token_error_count[10m]))",
+          "expr": "sum(increase(livepatch_server_contracts_token_error_count{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[10m]))",
           "legendFormat": "Invalid Token Errors",
           "range": true,
           "refId": "A"
@@ -868,7 +803,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(livepatch_server_timescaledb_write_errors_total[$__rate_interval]))",
+          "expr": "sum(increase(livepatch_server_timescaledb_write_errors_total{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
           "legendFormat": "write errors",
           "range": true,
           "refId": "A"
@@ -948,13 +883,121 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "max by (juju_model, juju_application) (livepatch_server_timescaledb_null_store)",
+          "expr": "max by (juju_model, juju_application) (livepatch_server_timescaledb_null_store{juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"})",
           "legendFormat": "{{juju_model}} / {{juju_application}}",
           "range": true,
           "refId": "A"
         }
       ],
       "title": "TimescaleDB Null Store",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "id": 107,
+      "panels": [],
+      "title": "Ping Error Health",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheusds}"
+      },
+      "description": "Ping error count per patch version and kernel over a 10m window. Backs the LivepatchPingErrSpikeHigh alert: warning when above 90 for 5m.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 108,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "9.5.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (patch_version, kernel) (increase(livepatch_patch_ping_events{status=\"ping_err\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}[$__rate_interval]))",
+          "legendFormat": "{{patch_version}} / {{kernel}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Ping Err Change / Patch Version & Kernel [10m]",
       "type": "timeseries"
     }
   ],

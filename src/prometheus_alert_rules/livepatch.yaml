@@ -1,3 +1,6 @@
+# Copyright 2026 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 groups:
   - name: livepatch_server_alerts
     rules:
@@ -93,3 +96,17 @@ groups:
           description: >
             The Livepatch server TimescaleDB is null. This could indicate that the TimescaleDB is not running, 
             or that the Livepatch server is unable to connect to it. Look at the Livepatch server logs for more information.
+
+      - alert: LivepatchPingErrSpikeHigh
+        expr: >
+          sum by (patch_version, kernel) (increase(livepatch_patch_ping_events{status="ping_err"}[10m])) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Ping error spike detected
+          description: >
+            The Livepatch ping error count has exceeded 90 in a 10-minute window
+            (patch_version {{ $labels.patch_version }}, kernel {{ $labels.kernel }},
+            current value {{ $value | printf "%.0f" }}). This may indicate a problem
+            with patch delivery for affected kernel versions.

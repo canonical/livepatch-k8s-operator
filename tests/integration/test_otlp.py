@@ -38,13 +38,15 @@ async def _get_pebble_env(ops_test: OpsTest) -> dict:
 
 async def _get_published_prometheus_alert_names(ops_test: OpsTest) -> set:
     """Return the set of Prometheus alert names livepatch published on the send-otlp relation."""
-    rc, stdout, stderr = await ops_test.juju("show-unit", f"{APP_NAME}/0", "--format=yaml")
+    # The rules are written to livepatch's own app databag, so they are visible as
+    # application-data from the collector side (receive-otlp endpoint).
+    rc, stdout, stderr = await ops_test.juju("show-unit", f"{OTEL_COLLECTOR_APP}/0", "--format=yaml")
     assert rc == 0, f"show-unit failed: {stderr}"
-    unit_data = yaml.safe_load(stdout)[f"{APP_NAME}/0"]
+    unit_data = yaml.safe_load(stdout)[f"{OTEL_COLLECTOR_APP}/0"]
     app_data = next(
         rel.get("application-data", {})
         for rel in unit_data.get("relation-info", [])
-        if rel.get("endpoint") == LIVEPATCH_SEND_OTLP_ENDPOINT
+        if rel.get("endpoint") == COLLECTOR_RECEIVE_OTLP_ENDPOINT
     )
     assert "rules" in app_data, f"no alert rules published on {LIVEPATCH_SEND_OTLP_ENDPOINT}: {app_data}"
     rules = json.loads(LZMABase64.decompress(json.loads(app_data["rules"])))

@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 
 
-"""Grafana constants module."""
+"""Charm-wide constants: logger setup, container names, and helper enumerations."""
 
 import logging
 

@@ -77,7 +77,7 @@ juju integrate canonical-livepatch-server-k8s:metrics-endpoint prometheus-k8s:me
 Livepatch can be optionally integrated with [`pro-airgapped-server`](https://charmhub.io/pro-airgapped-server) via the `pro-airgapped-server` endpoint. Note that since the `pro-airgapped-server` is a machine charm, a cross-model relation is needed. Assuming there is a SaaS named `pro-airgapped-server` in the model, the integration can be done by using this command:
 
 ```sh
-juju integrate canonical-livepatch-server:pro-airgapped-server pro-airgapped-server
+juju integrate canonical-livepatch-server-k8s:pro-airgapped-server pro-airgapped-server
 ```
 
 ### Livepatch CVE service (optional, requires)
@@ -85,8 +85,49 @@ juju integrate canonical-livepatch-server:pro-airgapped-server pro-airgapped-ser
 Livepatch can be optionally integrated with [Livepatch CVE service](https://charmhub.io/canonical-livepatch-cve-k8s) via the `cve-catalog` endpoint. This integration provides the Livepatch server with the information about CVEs fixed in Ubuntu kernels. The integration can be done by using this command:
 
 ```sh
-juju integrate canonical-livepatch-server canonical-livepatch-cve-k8s
+juju integrate canonical-livepatch-server-k8s:cve-catalog canonical-livepatch-cve-k8s
 ```
+
+### Ingress (optional, requires)
+
+Livepatch provides an endpoint, named `ingress`, which can be integrated with the [`traefik-k8s`](https://charmhub.io/traefik-k8s) charm (or any charm implementing the `ingress` interface) to expose the Livepatch server. To use this endpoint, set the `ingress-interface` config option to `ingress`:
+
+```sh
+juju config canonical-livepatch-server-k8s ingress-interface=ingress
+juju integrate canonical-livepatch-server-k8s:ingress traefik-k8s:ingress
+```
+
+> **Note:** Only one ingress method can be active at a time. Set `ingress-interface` to either `legacy-nginx-route` (default) or `ingress`.
+
+### Tracing (optional, requires)
+
+Livepatch can be optionally integrated with [Tempo](https://charmhub.io/tempo-coordinator-k8s) via the `send-traces` endpoint for OpenTelemetry distributed tracing. The charm supports both `otlp_grpc` and `otlp_http` protocols. Users can integrate using Juju as follows:
+
+```sh
+juju integrate canonical-livepatch-server-k8s:send-traces tempo-coordinator-k8s:tracing
+```
+
+> **Note:** The `tracing.enabled` config option must also be set to `true` to enable trace export.
+
+### OTLP Metrics (optional, requires)
+
+Livepatch can export OpenTelemetry metrics via the `send-otlp` endpoint. This supports both gRPC and HTTP protocols. Users can integrate using Juju as follows:
+
+```sh
+juju integrate canonical-livepatch-server-k8s:send-otlp <otlp-collector-charm>
+```
+
+> **Note:** The `otel-metrics.enabled` config option must also be set to `true` to enable OTLP metrics export.
+
+### Metrics Database (optional, requires)
+
+Livepatch can be optionally integrated with a separate PostgreSQL (TimescaleDB) instance for time-series metrics storage via the `metrics-db` endpoint:
+
+```sh
+juju integrate canonical-livepatch-server-k8s:metrics-db postgresql-k8s:database
+```
+
+> **Note:** The `timescale_db.enabled` config option must be set to `true` to enable metrics database usage.
 
 ## OCI Image
 

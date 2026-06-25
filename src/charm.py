@@ -477,6 +477,12 @@ class LivepatchCharm(CharmBase):
                 LOGGER.warning(error_msg)
                 return
 
+        if self.config.get("otel-metrics.enabled") and not self._get_otel_metrics_endpoint():
+            error_msg = "✘ otel-metrics.enabled requires a send-otlp relation."
+            self.unit.status = BlockedStatus(error_msg)
+            LOGGER.warning(error_msg)
+            return
+
         update_config_environment_layer = {
             "services": {
                 LIVEPATCH_SERVICE_NAME: {

@@ -43,11 +43,14 @@ async def _get_published_prometheus_alert_names(ops_test: OpsTest) -> set:
     rc, stdout, stderr = await ops_test.juju("show-unit", f"{OTEL_COLLECTOR_APP}/0", "--format=yaml")
     assert rc == 0, f"show-unit failed: {stderr}"
     unit_data = yaml.safe_load(stdout)[f"{OTEL_COLLECTOR_APP}/0"]
-    app_data = next((
-        rel.get("application-data", {})
-        for rel in unit_data.get("relation-info", [])
-        if rel.get("endpoint") == COLLECTOR_RECEIVE_OTLP_ENDPOINT
-    ), {})
+    app_data: dict = next(
+        (
+            rel.get("application-data", {})
+            for rel in unit_data.get("relation-info", [])
+            if rel.get("endpoint") == COLLECTOR_RECEIVE_OTLP_ENDPOINT
+        ),
+        {},
+    )
     assert "rules" in app_data, f"no alert rules published on {LIVEPATCH_SEND_OTLP_ENDPOINT}: {app_data}"
     rules = json.loads(LZMABase64.decompress(json.loads(app_data["rules"])))
     groups = rules["promql"].get("groups", [])

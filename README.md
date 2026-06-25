@@ -97,7 +97,7 @@ juju config canonical-livepatch-server-k8s ingress-interface=ingress
 juju integrate canonical-livepatch-server-k8s:ingress traefik-k8s:ingress
 ```
 
-> **Note:** Only one ingress method can be active at a time. Set `ingress-interface` to either `legacy-nginx-route` (default) or `ingress`.
+> **Note:** Only one ingress method can be active at a time. Set `ingress-interface` to either `legacy-nginx-route` (default) or `ingress`. The `legacy-nginx-route` option exists for backward compatibility with existing deployments that already use the `nginx-ingress-integrator` charm; new deployments should prefer `ingress` for a more portable, Gateway API–aligned approach.
 
 ### Tracing (optional, requires)
 
@@ -114,7 +114,7 @@ juju integrate canonical-livepatch-server-k8s:send-traces tempo-coordinator-k8s:
 Livepatch can export OpenTelemetry metrics via the `send-otlp` endpoint. This supports both gRPC and HTTP protocols. Users can integrate using Juju as follows:
 
 ```sh
-juju integrate canonical-livepatch-server-k8s:send-otlp <otlp-collector-charm>
+juju integrate canonical-livepatch-server-k8s:send-otlp opentelemetry-collector-k8s:receive-otlp
 ```
 
 > **Note:** The `otel-metrics.enabled` config option must also be set to `true` to enable OTLP metrics export.

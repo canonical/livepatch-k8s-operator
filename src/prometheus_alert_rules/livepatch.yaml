@@ -84,7 +84,7 @@ groups:
             Livepatch reported more than 10 TimescaleDB write errors in the last 10 minutes
             (current value {{ $value | printf "%.0f" }}). Livepatch may be unable to write to the TimescaleDB, 
             which could indicate that the TimescaleDB is not running, or that the Livepatch server is unable to connect to it.
-            Look at the Livepatch server logs for more nformation.
+            Look at the Livepatch server logs for more information.
 
       - alert: LivepatchTimescaleDBNullStore
         expr: livepatch_server_timescaledb_null_store == 1

@@ -9,7 +9,7 @@ This documents explains the processes and practices recommended for contributing
   - code quality
   - test coverage
   - user experience for Juju administrators this charm.
-- Please help us out in ensuring easy to review branches by rebasing your pull request branch onto the `develop` branch. 
+- Please help us out in ensuring easy to review branches by rebasing your pull request branch onto the `main` branch.
 This also avoids merge commits and creates a linear Git commit history.
 
 ## Developing

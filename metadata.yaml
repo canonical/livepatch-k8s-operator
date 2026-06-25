@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 #
 # For a complete list of supported options, see:
-# https://juju.is/docs/sdk/metadata-referencename: canonical-livepatch-server
+# https://juju.is/docs/sdk/metadata-reference
 
 name: canonical-livepatch-server-k8s
 display-name: Canonical Livepatch Server K8S

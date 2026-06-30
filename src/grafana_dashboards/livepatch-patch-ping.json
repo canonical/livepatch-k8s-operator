@@ -483,7 +483,7 @@
         "type": "prometheus",
         "uid": "${prometheusds}"
       },
-      "description": "Total number of ping_err events broken down by patch state over the dashboard time range. Note: this counts ping_err events per patch_state rather than unique machines, because machine identity is intentionally not exposed as a metric label.",
+      "description": "Total number of ping_err events broken down by patch state over the dashboard time range.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -803,6 +803,6 @@
   },
   "timezone": "",
   "title": "Livepatch Patch Ping Status",
-  "uid": null,
+  "uid": "8258838d-8d2a-4628-acc4-5d5ce8fa7bfb",
   "version": 1
 }

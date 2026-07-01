@@ -13,12 +13,12 @@ from urllib.parse import ParseResult, urlparse, urlunparse
 
 import pgsql
 import yaml
+from charmlibs.interfaces.otlp import OtlpRequirer
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
-from charmlibs.interfaces.otlp import OtlpRequirer
 from charms.tempo_coordinator_k8s.v0.tracing import ProtocolNotRequestedError, TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble

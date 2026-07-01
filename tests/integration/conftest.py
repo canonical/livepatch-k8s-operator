@@ -19,4 +19,5 @@ def _patch_libjuju_series_map() -> None:
 
 
 def pytest_configure(config):
+    """Pytest initialization hook: apply patches before test collection."""
     _patch_libjuju_series_map()

@@ -2208,7 +2208,14 @@ class TestOtelMetricsRelation(unittest.TestCase):
             harness.update_config({"server.url-template": "http://localhost/{filename}", "server.is-hosted": True})
             self._add_send_otlp_relation(
                 harness,
-                [{"protocol": "http", "endpoint": "https://otelcol:4318", "telemetries": ["metrics"], "insecure": False}],
+                [
+                    {
+                        "protocol": "http",
+                        "endpoint": "https://otelcol:4318",
+                        "telemetries": ["metrics"],
+                        "insecure": False,
+                    }
+                ],
             )
 
         env = self._get_environment(harness)
@@ -2225,7 +2232,12 @@ class TestOtelMetricsRelation(unittest.TestCase):
                 harness,
                 [
                     {"protocol": "grpc", "endpoint": "otelcol:4317", "telemetries": ["metrics"], "insecure": True},
-                    {"protocol": "http", "endpoint": "http://otelcol:4318", "telemetries": ["metrics"], "insecure": True},
+                    {
+                        "protocol": "http",
+                        "endpoint": "http://otelcol:4318",
+                        "telemetries": ["metrics"],
+                        "insecure": True,
+                    },
                 ],
             )
 

@@ -78,12 +78,13 @@ async def test_otel_metrics_env_vars_populated(ops_test: OpsTest):
     """Test that the OTLP endpoint env vars are populated in the Pebble plan after relating."""
     env = await _get_pebble_env(ops_test)
 
-    assert env.get("LP_OTEL_METRICS_OTLP_ENDPOINT"), (
-        "LP_OTEL_METRICS_OTLP_ENDPOINT should be set after relating to the collector"
-    )
-    assert env.get("LP_OTEL_METRICS_PROTOCOL") in ("grpc", "http"), (
-        f"LP_OTEL_METRICS_PROTOCOL should be 'grpc' or 'http', got {env.get('LP_OTEL_METRICS_PROTOCOL')!r}"
-    )
+    assert env.get(
+        "LP_OTEL_METRICS_OTLP_ENDPOINT"
+    ), "LP_OTEL_METRICS_OTLP_ENDPOINT should be set after relating to the collector"
+    assert env.get("LP_OTEL_METRICS_PROTOCOL") in (
+        "grpc",
+        "http",
+    ), f"LP_OTEL_METRICS_PROTOCOL should be 'grpc' or 'http', got {env.get('LP_OTEL_METRICS_PROTOCOL')!r}"
     logger.info(
         "OTLP endpoint: %s, protocol: %s, insecure: %s",
         env.get("LP_OTEL_METRICS_OTLP_ENDPOINT"),
@@ -100,9 +101,9 @@ async def test_otel_metrics_enabled_flag_is_independent(ops_test: OpsTest):
 
     # The relation being present must NOT auto-enable exporting; the operator
     # must explicitly set otel-metrics.enabled=true.
-    assert env.get("LP_OTEL_METRICS_ENABLED") == "false", (
-        "LP_OTEL_METRICS_ENABLED should not be set to 'true' by the relation alone"
-    )
+    assert (
+        env.get("LP_OTEL_METRICS_ENABLED") == "false"
+    ), "LP_OTEL_METRICS_ENABLED should not be set to 'true' by the relation alone"
 
 
 @pytest.mark.asyncio
@@ -119,9 +120,9 @@ async def test_otel_metrics_enabled_via_config(ops_test: OpsTest):
         )
 
     env = await _get_pebble_env(ops_test)
-    assert env.get("LP_OTEL_METRICS_ENABLED") == "true", (
-        "LP_OTEL_METRICS_ENABLED should be 'true' after setting otel-metrics.enabled config"
-    )
+    assert (
+        env.get("LP_OTEL_METRICS_ENABLED") == "true"
+    ), "LP_OTEL_METRICS_ENABLED should be 'true' after setting otel-metrics.enabled config"
 
     # Reset for subsequent tests.
     await ops_test.model.applications[APP_NAME].set_config({"otel-metrics.enabled": "false"})
@@ -147,12 +148,12 @@ async def test_otel_metrics_relation_removed_clears_env_vars(ops_test: OpsTest):
 
     env = await _get_pebble_env(ops_test)
 
-    assert not env.get("LP_OTEL_METRICS_OTLP_ENDPOINT"), (
-        "LP_OTEL_METRICS_OTLP_ENDPOINT should be cleared after removing the relation"
-    )
-    assert not env.get("LP_OTEL_METRICS_PROTOCOL"), (
-        "LP_OTEL_METRICS_PROTOCOL should be cleared after removing the relation"
-    )
+    assert not env.get(
+        "LP_OTEL_METRICS_OTLP_ENDPOINT"
+    ), "LP_OTEL_METRICS_OTLP_ENDPOINT should be cleared after removing the relation"
+    assert not env.get(
+        "LP_OTEL_METRICS_PROTOCOL"
+    ), "LP_OTEL_METRICS_PROTOCOL should be cleared after removing the relation"
 
 
 @pytest.mark.asyncio

@@ -44,6 +44,7 @@ async def test_deploy_and_relate_otel_collector(ops_test: OpsTest):
         OTEL_COLLECTOR_APP,
         application_name=OTEL_COLLECTOR_APP,
         channel=OTEL_COLLECTOR_CHANNEL,
+        base="ubuntu@26.04",
         trust=True,
     )
 

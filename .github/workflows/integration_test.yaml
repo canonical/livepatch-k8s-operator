@@ -163,6 +163,15 @@ jobs:
           EOL
           echo "$REGISTRY_CONFIG" | sudo tee -a /var/snap/microk8s/current/args/containerd-template.toml
           sudo snap restart microk8s.daemon-containerd
+      - name: Refresh MicroK8s CA certificate
+        run: |
+          # Python 3.12+ requires CA certs to have the keyUsage extension with
+          # keyCertSign. Self-hosted runners may carry a MicroK8s CA cert that
+          # pre-dates this requirement. Refreshing the CA cert ensures the
+          # opentelemetry-collector-k8s charm can connect to the k8s API without
+          # an SSL certificate verification error during storage-attached.
+          sudo microk8s refresh-certs --cert ca.crt
+          sudo microk8s status --wait-ready --timeout 120
       - name: Install tox
         run: python -m pip install tox
       - name: Run OpenTelemetry Collector integration tests

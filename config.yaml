@@ -9,7 +9,7 @@ options:
   ##########
   server.log-level:
     default: info
-    description: The servers log level.
+    description: The server's log level (e.g., debug, info, warning, error).
     type: string
   server.url-template:
     description: |
@@ -209,7 +209,7 @@ options:
     type: string
   timescale_db.work_mem:
     description: |
-      The PostgreSQL work_mem parameter for connections with TimescaleDB.
+      The PostgreSQL work_mem parameter (in MB) for connections with TimescaleDB.
     default: 16
     type: int
   timescale_db.flush_timeout:
@@ -221,21 +221,19 @@ options:
   patch-storage.type:
     default: filesystem
     description: |
-      The storage type to be used by the charm, defaults to filesystem.
-      The path can be located under:
-        /var/snap/canonical-livepatch-server/common/patches
-
-      The available options are:
+      The storage backend type for patches. Available options are:
         - filesystem
         - swift
         - postgres
         - s3
 
-      When using postgres for storage, the charm will work automatically by means of relation.
-      The default database name is under:
-        livepatch
+      When using "postgres" for storage, the charm uses the database relation
+      automatically with the default database name "livepatch". A custom
+      database may be specified via patch-storage.postgres-connection-string
+      but must be created manually.
 
-      The database name can be changed but must be created.
+      When using "filesystem", patches are stored at the path configured in
+      patch-storage.filesystem-path.
     type: string
   patch-storage.filesystem-path:
     default: "/var/lib/livepatch/patches"
@@ -486,11 +484,11 @@ options:
     type: boolean
   machine-reports.database.retention-days:
     default: 10
-    description: A thing used by the charm.
+    description: Number of days to retain machine reports in the database before cleanup.
     type: int
   machine-reports.database.cleanup-row-limit:
     default: 1000
-    description: Maximum number of rows to remove with a single report cleanup row.
+    description: Maximum number of rows to remove in a single report cleanup run.
     type: int
   machine-reports.database.cleanup-interval:
     default: 6h
@@ -513,24 +511,23 @@ options:
     type: string
 
   influx.enabled:
-    description: "Enables influx db support for time series reporting."
+    description: Whether to enable InfluxDB support for time-series metrics reporting.
     type: boolean
   influx.url:
-    # TODO: This should be changed to a relation
-    description: "URL to connect to influx DB"
+    description: URL of the InfluxDB instance to connect to.
     type: string
   influx.token:
-    description: "Token to use for influx"
+    description: Authentication token for InfluxDB.
     type: string
   influx.bucket:
-    description: "Bucket to send data"
+    description: InfluxDB bucket to write general metrics data to.
     type: string
   influx.ping_bucket:
-    description: "Bucket to send ping data under a different retention policy"
+    description: InfluxDB bucket for ping data (may use a different retention policy).
     type: string
-    
+
   influx.organization:
-    description: "Organization name"
+    description: InfluxDB organization name.
     type: string
 
   cloud_delay.enabled:
@@ -610,3 +607,23 @@ options:
     default: 1.0
     description: Fraction of traces to sample (0.0 to 1.0).
     type: float
+
+  ################
+  # OTLP Metrics #
+  ################
+  otel-metrics.enabled:
+    default: false
+    description: Whether to enable OpenTelemetry metrics export. This is a manual toggle and is independent of any charm relation.
+    type: boolean
+  otel-metrics.service-name:
+    default: "livepatch-server"
+    description: Service name reported in OTLP metrics.
+    type: string
+  otel-metrics.export-interval:
+    default: "60s"
+    description: How often metrics are exported (e.g. "60s", "1m").
+    type: string
+  otel-metrics.export-timeout:
+    default: "30s"
+    description: Timeout for each metrics export attempt (e.g. "30s").
+    type: string

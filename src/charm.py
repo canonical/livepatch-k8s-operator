@@ -18,6 +18,7 @@ from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
 from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charmlibs.interfaces.otlp import OtlpRequirer
 from charms.tempo_coordinator_k8s.v0.tracing import ProtocolNotRequestedError, TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from ops import pebble
@@ -44,6 +45,7 @@ PRO_AIRGAPPED_SERVER_RELATION = "pro-airgapped-server"
 CVE_CATALOG_RELATION = "cve-catalog"
 METRICS_DB_RELATION = "metrics-db"
 TRACING_RELATION = "send-traces"
+OTEL_METRICS_RELATION = "send-otlp"
 
 REQUIRED_SETTINGS = {
     "server.url-template": "✘ server.url-template config not set",
@@ -54,14 +56,26 @@ TRUSTED_CA_FILENAME = "/usr/local/share/ca-certificates/trusted-contracts.ca.crt
 
 
 class DeferError(Exception):
-    """An exception that indicates the event should be deferred."""
+    """An exception that indicates the event should be deferred.
+
+    Raised during workload configuration when a required precondition is not
+    yet met (e.g., database not connected, container not ready) so that the
+    calling hook can defer the event and retry later.
+    """
 
 
 class LivepatchCharm(CharmBase):
-    """The livepatch k8s charm."""
+    """Charm for deploying and managing the Canonical Livepatch Server on Kubernetes.
+
+    This charm configures and runs the Livepatch server workload, manages database
+    integrations (PostgreSQL for state, optional TimescaleDB for metrics), handles
+    schema migrations, and integrates with the Canonical observability stack (Prometheus,
+    Grafana, Loki, Tempo) as well as ingress providers (nginx-ingress-integrator or
+    traefik-k8s).
+    """
 
     def __init__(self, *args):
-        """Init function."""
+        """Initialise the charm, register event observers, and set up integrations."""
         super().__init__(*args)
         setup_log_redaction()
 
@@ -162,6 +176,16 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.tracing.on.endpoint_changed, self._on_tracing_endpoint_changed)
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_tracing_endpoint_removed)
 
+        # OTLP metrics
+        self.otel_metrics = OtlpRequirer(
+            self,
+            relation_name=OTEL_METRICS_RELATION,
+            protocols=["grpc", "http"],
+            telemetries=["metrics"],
+        )
+        self.framework.observe(self.on.send_otlp_relation_changed, self._on_otel_metrics_relation_changed)
+        self.framework.observe(self.on.send_otlp_relation_broken, self._on_otel_metrics_relation_broken)
+
         self._update_ingress_method()
 
         # Loki log-proxy relation (for Juju < 3.4)
@@ -209,22 +233,23 @@ class LivepatchCharm(CharmBase):
         self._update_workload_container_config(event)
 
     def on_config_changed(self, event):
-        """On config changed hook, which runs first."""
+        """Handle config-changed hook: refresh ingress method and reconfigure the workload."""
         self._update_ingress_method()
         self._update_workload_container_config(event)
 
     def on_start(self, event):
-        """On start hook, which runs after the on-config-changed hook."""
+        """Handle start hook: configure the workload container."""
         self._update_workload_container_config(event)
 
-    # Runs third and on any container restarts & does not guarantee the container is "still up"
-    # Runs additionally when; a new unit is created, and upgrade-charm has been run
     def on_pebble_ready(self, event):
-        """On pebble ready hook, which runs after the on-start hook."""
+        """Handle pebble-ready hook: configure the workload once Pebble is available.
+
+        Fires on new unit creation, container restarts, and after upgrade-charm.
+        """
         self._update_workload_container_config(event)
 
     def on_update_status(self, event):
-        """On update status."""
+        """Handle update-status hook: verify workload health and refresh unit status."""
         workload = self.unit.get_container(WORKLOAD_CONTAINER)
         self._ready(workload)
 
@@ -232,15 +257,18 @@ class LivepatchCharm(CharmBase):
     # When a leader loses leadership it only sees the leader-settings-changed
     # As such you will only receive this even if YOU ARE the CURRENT leader (so no need to check)
     def on_leader_elected(self, event):
-        """Run after the leader is elected."""
+        """Handle leader-elected hook: reconfigure workload on the new leader unit."""
         self._update_workload_container_config(event)
 
     def on_stop(self, _):
-        """On stop hook."""
+        """Handle stop hook: gracefully stop the Livepatch service."""
         self._stop_service()
 
     def _get_schema_upgrade_targets(self) -> Dict[str, str]:
-        """Return database targets that require schema checks/upgrades."""
+        """Return a mapping of database target names to their connection strings.
+
+        Only databases that are currently connected (DSN available) are included.
+        """
         targets: Dict[str, str] = {}
 
         if self._state.dsn:
@@ -252,7 +280,11 @@ class LivepatchCharm(CharmBase):
         return targets
 
     def handle_schema_upgrade(self):
-        """Check if a schema upgrade is required, and perform it."""
+        """Check if a schema upgrade is required for each connected database, and perform it.
+
+        Raises:
+            DeferError: If the database connection or schema container is not yet available.
+        """
         targets = self._get_schema_upgrade_targets()
         dsn = targets.get("livepatchdb")
         if not dsn:
@@ -280,7 +312,15 @@ class LivepatchCharm(CharmBase):
                     LOGGER.error(f"Failed to perform schema upgrade for {db_name}: {e}")
 
     def get_env_vars(self) -> dict:
-        """Map config to env vars and return a processed dict."""
+        """Build the environment variable dictionary for the Livepatch Pebble layer.
+
+        Merges charm config, relation data (database, tracing, OTLP metrics,
+        airgapped contracts, CVE service), and proxy settings into a flat dict
+        of LP_* environment variables consumed by the Livepatch server binary.
+
+        Returns:
+            A dict of environment variable names to their values.
+        """
         env_vars = utils.map_config_to_env_vars(self)
 
         env_vars["LIVEPATCH_CONFIG_LOCATION"] = "/etc/livepatch.yaml"
@@ -326,6 +366,14 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_TRACING_PROTOCOL"] = protocol
             env_vars["LP_TRACING_INSECURE"] = insecure
 
+        # OTLP metrics endpoint from relation (enabled flag is a manual config toggle, not set here).
+        otel_metrics = self._get_otel_metrics_endpoint()
+        if otel_metrics:
+            endpoint, protocol, insecure = otel_metrics
+            env_vars["LP_OTEL_METRICS_OTLP_ENDPOINT"] = endpoint
+            env_vars["LP_OTEL_METRICS_PROTOCOL"] = protocol
+            env_vars["LP_OTEL_METRICS_INSECURE"] = insecure
+
         # remove empty environment values
         env_vars = {key: value for key, value in env_vars.items() if value != "" and value is not None}
 
@@ -342,6 +390,9 @@ class LivepatchCharm(CharmBase):
             "LP_TRACING_OTLP_ENDPOINT",
             "LP_TRACING_PROTOCOL",
             "LP_TRACING_INSECURE",
+            "LP_OTEL_METRICS_OTLP_ENDPOINT",
+            "LP_OTEL_METRICS_PROTOCOL",
+            "LP_OTEL_METRICS_INSECURE",
         }
         # Set keys to empty string if they are not already set.
         for key in explicit_keys:
@@ -350,14 +401,21 @@ class LivepatchCharm(CharmBase):
         return env_vars
 
     def _update_workload_version(self):
-        """Update the workload version. Version will be present in the Version column when running juju status."""
+        """Read the version file and set the workload version on the unit.
+
+        The version is displayed in the Version column of ``juju status``.
+        """
         charm_file = pathlib.Path("version")
         raw_version = charm_file.read_text(encoding="utf-8")
         version = raw_version.strip()
         self.unit.set_workload_version(version)
 
     def _update_ingress_method(self):
-        """Update the ingress interface based on the config."""
+        """Configure the active ingress integration based on the ``ingress-interface`` config option.
+
+        Supports ``legacy-nginx-route`` (nginx-ingress-integrator) and ``ingress`` (traefik-k8s).
+        This method is idempotent and will not re-initialise an already-configured interface.
+        """
         ingress_method = self.config.get("ingress-interface")
 
         # Keep backwards compatibility: default to legacy-nginx-route when not configured.
@@ -394,13 +452,16 @@ class LivepatchCharm(CharmBase):
             self.unit.status = BlockedStatus(error_msg)
 
     def _update_workload_container_config(self, event: Optional[HookEvent]):
-        """
-        Update workload with all available configuration data.
+        """Reconcile the workload container's Pebble layer with current charm state.
 
-        Note that given event should be deferrable. For example, action events
-        (of type ActionEvent), will raise exception if their `defer` method is
-        invoked. So, the caller of this method should pass event as None if it's
-        not a deferrable event.
+        This is the central convergence method: it validates preconditions (peer
+        relation ready, container connectable, database available, required config
+        set), performs schema upgrades if needed, builds the Pebble layer with
+        up-to-date environment variables, and (re)starts the Livepatch service.
+
+        Args:
+            event: The triggering hook event to defer if preconditions are unmet,
+                   or None for non-deferrable contexts (e.g., action handlers).
         """
         if not self._state.is_ready():
             self._defer(event)
@@ -472,6 +533,7 @@ class LivepatchCharm(CharmBase):
         self._start_or_restart_service(workload_container)
 
     def _start_or_restart_service(self, workload_container):
+        """Start the Livepatch service if stopped, or restart it if already running."""
         if self._ready(workload_container):
             if workload_container.get_service(LIVEPATCH_SERVICE_NAME).is_running():
                 workload_container.restart(LIVEPATCH_SERVICE_NAME)
@@ -484,7 +546,12 @@ class LivepatchCharm(CharmBase):
 
         self.unit.status = ActiveStatus()
 
-    def _ready(self, workload_container):
+    def _ready(self, workload_container) -> bool:
+        """Check whether the Livepatch service is configured and ready.
+
+        Returns:
+            True if the container is connectable and the service plan is available.
+        """
         if workload_container.can_connect():
             plan = workload_container.get_plan()
             if plan.services.get(LIVEPATCH_SERVICE_NAME) is None:
@@ -561,6 +628,7 @@ class LivepatchCharm(CharmBase):
         self._update_workload_container_config(event)
 
     def _on_legacy_db_standby_changed(self, event: pgsql.StandbyChangedEvent):
+        """Handle standby units of PostgreSQL changing (legacy relation). Currently a no-op."""
         LOGGER.info("(postgresql, legacy database relation) STANDBY_CHANGED event fired.")
         # NOTE NOTE NOTE
         # This should be used for non-primary on-prem instances when configuring
@@ -574,7 +642,7 @@ class LivepatchCharm(CharmBase):
         return
 
     def _stop_service(self) -> None:
-        """Stop the service without attempting to restart."""
+        """Stop the Livepatch service if it is running, without restarting."""
         container = self.unit.get_container(WORKLOAD_CONTAINER)
         if container.can_connect():
             try:
@@ -590,6 +658,7 @@ class LivepatchCharm(CharmBase):
             LOGGER.info("workload container not ready when trying to stop service")
 
     def _clear_db_connection(self) -> None:
+        """Clear the database connection string from peer relation state (leader only)."""
         LOGGER.info("Clearing database connection string from state")
         if self.unit.is_leader() and self._state.is_ready():
             self._state.dsn = None
@@ -604,13 +673,19 @@ class LivepatchCharm(CharmBase):
     # Database
 
     def _is_legacy_database_relation_activated(self) -> bool:
+        """Return True if the legacy (pgsql) database relation has any remote units."""
         return len(self.model.relations[DATABASE_RELATION_LEGACY]) > 0
 
     def _is_database_relation_activated(self) -> bool:
+        """Return True if the modern (postgresql_client) database relation has any remote units."""
         return len(self.model.relations[DATABASE_RELATION]) > 0
 
     def _on_database_event(self, event: RelationEvent) -> None:
-        """Database event handler."""
+        """Handle database-created/endpoints-changed events for the modern database relation.
+
+        Extracts connection info, composes a PostgreSQL URI, stores it in peer
+        relation state, and triggers a workload reconfiguration.
+        """
         if not self.model.unit.is_leader():
             return
 
@@ -649,7 +724,12 @@ class LivepatchCharm(CharmBase):
         self._update_workload_container_config(event)
 
     def _get_db_info(self, db_relation) -> Optional[Dict]:
-        """Get database connection info by reading relation data from a given relation object."""
+        """Get database connection info from a DatabaseRequires relation object.
+
+        Returns:
+            A dict with keys ``endpoint``, ``password``, and ``user``, or None
+            if the relation is not yet ready.
+        """
         if len(db_relation.relations) == 0 or not db_relation.is_resource_created():
             LOGGER.debug("no (postgresql) database relation found or resource not created")
             return None
@@ -668,7 +748,11 @@ class LivepatchCharm(CharmBase):
         }
 
     def _on_metrics_db_event(self, event: RelationEvent) -> None:
-        """Metrics database event handler."""
+        """Handle database events for the metrics-db (TimescaleDB) relation.
+
+        Extracts connection info, stores the DSN in peer relation state, and
+        triggers a workload reconfiguration.
+        """
         if not self.model.unit.is_leader():
             return
 
@@ -772,6 +856,25 @@ class LivepatchCharm(CharmBase):
         """Handle tracing endpoint-removed event."""
         self._update_workload_container_config(event)
 
+    def _on_otel_metrics_relation_changed(self, event):
+        """Handle send-otlp relation events."""
+        self._update_workload_container_config(event)
+
+    def _on_otel_metrics_relation_broken(self, event):
+        """Handle send-otlp relation-broken event."""
+        self._update_workload_container_config(event)
+
+    def _get_otel_metrics_endpoint(self) -> Optional[tuple]:
+        """Return (endpoint, protocol, insecure) from the send-otlp relation, or None."""
+        endpoints = self.otel_metrics.endpoints
+        if not endpoints:
+            return None
+        otlp = next(iter(endpoints.values()))
+        # Use urlparse to extract bare host:port, consistent with how tracing does it.
+        raw = otlp.endpoint
+        host_port = urlparse(raw).netloc or raw
+        return host_port, otlp.protocol, otlp.insecure
+
     def _get_tracing_endpoint(self) -> Optional[tuple]:
         """Return (endpoint, protocol, insecure) from the tracing relation, or None."""
         if not self.tracing.is_ready():
@@ -808,7 +911,7 @@ class LivepatchCharm(CharmBase):
 
     # Actions
     def restart_action(self, event):
-        """Restart the workload container."""
+        """Handle the ``restart`` action: stop the service and reconfigure the workload."""
         container = self.unit.get_container(WORKLOAD_CONTAINER)
 
         if container.can_connect():
@@ -824,7 +927,7 @@ class LivepatchCharm(CharmBase):
         self._update_workload_container_config(None)
 
     def schema_upgrade_action(self, event: ActionEvent):
-        """Run the schema upgrade action."""
+        """Handle the ``schema-upgrade`` action: run database migrations for all targets."""
         if not self._state.is_ready():
             # Note that action events are not deferrable, so we should just return.
             LOGGER.warning("State is not ready")
@@ -858,11 +961,17 @@ class LivepatchCharm(CharmBase):
                 return
 
     def schema_upgrade(self, container, target, conn_str):
-        """
-        Perform a schema upgrade on the configurable database.
+        """Perform a schema upgrade on the specified database target.
 
-        Raise an exception if there is a failure to prevent further charm.
-        hook from firing and prevent more non-leader units from upgrading.
+        Args:
+            container: The schema-upgrade sidecar container.
+            target: The database target name (e.g., ``livepatchdb`` or ``timescaledb``).
+            conn_str: The PostgreSQL connection URI.
+
+        Raises:
+            FileNotFoundError: If the schema tool binary is missing.
+            pebble.APIError: If the exec call fails to start.
+            pebble.ExecError: If the migration command returns a non-zero exit code.
         """
         LOGGER.info("Attempting schema upgrade")
         self.unit.status = WaitingStatus("pg connection successful, attempting upgrade")
@@ -900,7 +1009,7 @@ class LivepatchCharm(CharmBase):
             raise e
 
     def schema_version_check_action(self, event: ActionEvent):
-        """Check schema version action."""
+        """Handle the ``schema-version`` action: report whether migrations are pending."""
         if not self._state.is_ready():
             # Note that action events are not deferrable, so we should just return.
             LOGGER.warning("State is not ready")
@@ -935,7 +1044,22 @@ class LivepatchCharm(CharmBase):
                 return
 
     def migration_is_required(self, container, target, conn_str: str) -> bool:
-        """Run a schema version check against the database."""
+        """Check whether the database schema requires migration.
+
+        Args:
+            container: The schema-upgrade sidecar container.
+            target: The database target name (e.g., ``livepatchdb`` or ``timescaledb``).
+            conn_str: The PostgreSQL connection URI.
+
+        Returns:
+            True if migrations are pending, False if the schema is up to date.
+
+        Raises:
+            FileNotFoundError: If the schema tool binary is missing.
+            ValueError: If conn_str is empty.
+            pebble.APIError: If the exec call fails to start.
+            pebble.ExecError: If the check command fails with an unexpected exit code.
+        """
         if not container.exists("/usr/local/bin/livepatch-schema-tool"):
             LOGGER.error("livepatch-schema-tool not found in the schema upgrade container")
             raise FileNotFoundError("Failed to find schema tool")
@@ -975,7 +1099,10 @@ class LivepatchCharm(CharmBase):
             raise e
 
     def get_resource_token_action(self, event: ActionEvent):
-        """Retrieve the livepatch resource token from ua-contracts."""
+        """Handle the ``get-resource-token`` action: exchange a contract token for a resource token.
+
+        The resource token is stored in peer relation state and used for patch synchronisation.
+        """
         if not self.unit.is_leader():
             LOGGER.error("cannot fetch the resource token: unit is not the leader")
             event.set_results({"error": "cannot fetch the resource token: unit is not the leader"})
@@ -1030,7 +1157,10 @@ class LivepatchCharm(CharmBase):
         event.set_results({"result": "resource token set"})
 
     def emit_updated_config_action(self, event: ActionEvent):
-        """Convert a legacy reactive charm config to the current ops charm config."""
+        """Handle the ``emit-updated-config`` action: convert legacy reactive charm config to the current format.
+
+        Accepts a YAML config file content and returns the equivalent ops charm config options.
+        """
         config_content = event.params["config-file"]
         try:
             config_yaml = yaml.safe_load(config_content)
@@ -1053,6 +1183,7 @@ class LivepatchCharm(CharmBase):
         self.unit.status = status(msg)
 
     def _get_logrotate_config(self):
+        """Return the logrotate configuration content for the Livepatch log file."""
         return f"""{LOG_FILE} {"{"}
             rotate 3
             daily

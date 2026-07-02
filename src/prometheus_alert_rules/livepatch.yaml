@@ -88,7 +88,7 @@ groups:
           summary: Elevated TimescaleDB write errors
           description: >
             Livepatch reported more than 10 TimescaleDB write errors in the last 10 minutes
-            (current value {{ $value | printf "%.0f" }}). Livepatch may be unable to write to the TimescaleDB, 
+            (current value {{ $value | printf "%.0f" }}). Livepatch may be unable to write to the TimescaleDB,
             which could indicate that the TimescaleDB is not running, or that the Livepatch server is unable to connect to it.
             Look at the Livepatch server logs for more information.
 
@@ -101,7 +101,7 @@ groups:
         annotations:
           summary: TimescaleDB store is null
           description: >
-            The Livepatch server TimescaleDB is null. This could indicate that the TimescaleDB is not running, 
+            The Livepatch server TimescaleDB is null. This could indicate that the TimescaleDB is not running,
             or that the Livepatch server is unable to connect to it. Look at the Livepatch server logs for more information.
 
       - alert: LivepatchPingErrSpikeHigh

@@ -51,7 +51,7 @@ async def _get_published_prometheus_alert_names(ops_test: OpsTest) -> set:
         ),
         {},
     )
-    assert "rules" in app_data, f"no alert rules published on {LIVEPATCH_SEND_OTLP_ENDPOINT}: {app_data}"
+    assert "rules" in app_data, f"no alert rules published on {COLLECTOR_RECEIVE_OTLP_ENDPOINT}: {app_data}"
     rules = json.loads(LZMABase64.decompress(json.loads(app_data["rules"])))
     groups = rules["promql"].get("groups", [])
     return {rule["alert"] for group in groups for rule in group.get("rules", []) if "alert" in rule}

@@ -146,18 +146,6 @@ jobs:
         run: sudo snap install charmcraft --classic
       - name: Build charm
         run: sudo charmcraft pack --destructive-mode --verbosity=trace
-      # actions-operator uses `snap install` which is a no-op on persistent
-      # self-hosted runners that already have MicroK8s. This means the runner
-      # keeps a stale snap that was generated before the fix for
-      # canonical/microk8s#4864 (CA missing keyUsage), which Python 3.13+
-      # OpenSSL 3.x rejects. Purging first forces a clean install so the fresh
-      # snap generates a correct CA before Juju bootstraps.
-      - name: Reinstall MicroK8s to ensure a clean CA (microk8s#4864)
-        run: |
-          set -eux
-          sudo snap remove microk8s --purge || true
-          sudo snap install microk8s --classic --channel=1.36-strict/stable
-          sudo microk8s status --wait-ready --timeout=600
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:

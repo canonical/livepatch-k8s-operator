@@ -120,7 +120,7 @@
             "uid": "${prometheusds}"
           },
           "editorMode": "code",
-          "expr": "ALERTS{alertname=~\"Livepatch.*\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}",
+          "expr": "ALERTS{alertname=~\"Livepatch.*\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",job=~\"$job|\"}",
           "legendFormat": "{{alertname}}",
           "range": true,
           "refId": "A"

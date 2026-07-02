@@ -8,11 +8,12 @@ groups:
         expr: >
           histogram_quantile(
             0.95,
-            sum(rate(livepatch_server_database_query_duration_seconds_bucket{method!~"^KPI.*"}[10m])) by (le, method)
+            sum(rate(livepatch_server_database_query_duration_seconds_bucket{method!~"^KPI.*"}[10m])) by (le, method, juju_model, juju_model_uuid)
           ) > 5
         for: 10m
         labels:
           severity: warning
+          group: livepatch-alerts
         annotations:
           summary: High database query latency (p95 above 5s)
           description: >
@@ -21,10 +22,11 @@ groups:
             {{ $value | humanizeDuration }}).
 
       - alert: LivepatchDatabaseErrorsHigh
-        expr: sum(rate(livepatch_server_database_error_count[5m])) > 1
+        expr: sum by (juju_model, juju_model_uuid) (rate(livepatch_server_database_error_count[5m])) > 1
         for: 5m
         labels:
           severity: critical
+          group: livepatch-alerts
         annotations:
           summary: Elevated database error rate
           description: >
@@ -35,11 +37,12 @@ groups:
         expr: >
           histogram_quantile(
             0.95,
-            sum(rate(livepatch_server_http_request_duration_seconds_bucket[10m])) by (le, handler)
+            sum(rate(livepatch_server_http_request_duration_seconds_bucket[10m])) by (le, handler, juju_model, juju_model_uuid)
           ) > 5
         for: 5m
         labels:
           severity: warning
+          group: livepatch-alerts
         annotations:
           summary: High HTTP endpoint latency (p95 above 5s)
           description: >
@@ -48,10 +51,11 @@ groups:
             {{ $value | humanizeDuration }}).
 
       - alert: LivepatchContractsServerErrorsHigh
-        expr: sum(increase(livepatch_server_contracts_server_error_count[10m])) > 10
+        expr: sum by (juju_model, juju_model_uuid) (increase(livepatch_server_contracts_server_error_count[10m])) > 10
         for: 1m
         labels:
           severity: warning
+          group: livepatch-alerts
         annotations:
           summary: Elevated UA-Contracts server errors
           description: >
@@ -61,10 +65,11 @@ groups:
             UA-Contracts.
 
       - alert: LivepatchContractsTokenErrorsHigh
-        expr: sum(increase(livepatch_server_contracts_token_error_count[10m])) > 500
+        expr: sum by (juju_model, juju_model_uuid) (increase(livepatch_server_contracts_token_error_count[10m])) > 500
         for: 15m
         labels:
           severity: warning
+          group: livepatch-alerts
         annotations:
           summary: Elevated UA-Contracts invalid token errors
           description: >
@@ -74,10 +79,11 @@ groups:
             key rotation in UA-Contracts.
 
       - alert: LivepatchTimescaleDBWriteErrorsHigh
-        expr: sum(increase(livepatch_server_timescaledb_write_errors_total[10m])) > 10
+        expr: sum by (juju_model, juju_model_uuid) (increase(livepatch_server_timescaledb_write_errors_total[10m])) > 10
         for: 1m
         labels:
           severity: warning
+          group: livepatch-alerts
         annotations:
           summary: Elevated TimescaleDB write errors
           description: >
@@ -91,6 +97,7 @@ groups:
         for: 1m
         labels:
           severity: critical
+          group: livepatch-alerts
         annotations:
           summary: TimescaleDB store is null
           description: >
@@ -99,10 +106,11 @@ groups:
 
       - alert: LivepatchPingErrSpikeHigh
         expr: >
-          sum by (patch_version, kernel) (increase(livepatch_patch_ping_events{status="ping_err"}[10m])) > 90
+          sum by (patch_version, kernel, job) (increase(livepatch_patch_ping_events{status="ping_err"}[10m])) > 90
         for: 5m
         labels:
           severity: warning
+          group: livepatch-alerts
         annotations:
           summary: Ping error spike detected
           description: >

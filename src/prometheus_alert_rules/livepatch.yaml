@@ -106,7 +106,7 @@ groups:
 
       - alert: LivepatchPingErrSpikeHigh
         expr: >
-          sum by (patch_version, kernel, job) (increase(livepatch_patch_ping_events{status="ping_err"}[10m])) > 90
+          sum by (patch_version, kernel, job) (increase(livepatch_patch_ping_events{ping_type="ping_err"}[10m])) > 90
         for: 5m
         labels:
           severity: warning

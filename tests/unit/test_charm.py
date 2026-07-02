@@ -10,14 +10,17 @@ from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
 import yaml
+from charmlibs.interfaces.otlp import RuleStore
 from charms.nginx_ingress_integrator.v0.nginx_route import NginxRouteRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
+from cosl.juju_topology import JujuTopology
+from cosl.utils import LZMABase64
 from ops import pebble
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.testing import ActionFailed, Harness
 
 from log_redactor import _REDACTED
-from src.charm import LIVEPATCH_SERVICE_NAME, SERVER_PORT, LivepatchCharm
+from src.charm import LIVEPATCH_SERVICE_NAME, PROMETHEUS_ALERT_RULES_PATH, SERVER_PORT, LivepatchCharm
 from src.state import State
 
 APP_NAME = "canonical-livepatch-server-k8s"
@@ -28,6 +31,17 @@ TEST_CA_CERT_1 = "TmV3IFRlc3QgQ0EgQ2VydAo="
 
 TEST_OLD_REACTIVE_CONFIG = "./tests/unit/test-data/old_config.yaml"
 EXPECTED_OPS_CONFIG = "./tests/unit/test-data/expected_config.yaml"
+
+EXPECTED_PROMETHEUS_ALERTS = {
+    "LivepatchDatabaseResponseTimeHigh",
+    "LivepatchDatabaseErrorsHigh",
+    "LivepatchEndpointLatencyHigh",
+    "LivepatchContractsServerErrorsHigh",
+    "LivepatchContractsTokenErrorsHigh",
+    "LivepatchTimescaleDBWriteErrorsHigh",
+    "LivepatchTimescaleDBNullStore",
+    "LivepatchPingErrSpikeHigh",
+}
 
 
 class MockOutput:
@@ -60,6 +74,7 @@ class TestCharm(unittest.TestCase):
 
     def setUp(self):
         self.harness = Harness(LivepatchCharm)
+        self.harness.set_model_name("livepatch")
         self.addCleanup(self.harness.cleanup)
 
         # create version file
@@ -131,6 +146,31 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(self.harness.charm.unit.status.name, ActiveStatus.name)
         self.assertEqual(self.harness.charm.unit.status.message, "")
+
+    def test_prometheus_alert_rules_file_loads(self):
+        """The Prometheus alert rules file parses into the expected Prometheus alerts."""
+        store = RuleStore(JujuTopology.from_charm(self.harness.charm))
+        store.add_promql_path(PROMETHEUS_ALERT_RULES_PATH)
+
+        groups = store.promql.as_dict().get("groups", [])
+        alert_names = {rule["alert"] for group in groups for rule in group.get("rules", []) if "alert" in rule}
+        self.assertEqual(EXPECTED_PROMETHEUS_ALERTS, alert_names)
+
+    def test_prometheus_alert_rules_published_to_relation(self):
+        """Alert rules are published (LZMA-compressed) to the send-otlp relation databag."""
+        self.harness.set_leader(True)
+        rel_id = self.harness.add_relation("send-otlp", "opentelemetry-collector-k8s")
+
+        self.harness.charm.otel_metrics.publish()
+
+        databag = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
+        self.assertIn("rules", databag)
+        self.assertIn("metadata", databag)
+
+        decoded = json.loads(LZMABase64.decompress(json.loads(databag["rules"])))
+        groups = decoded["promql"].get("groups", [])
+        alert_names = {rule["alert"] for group in groups for rule in group.get("rules", []) if "alert" in rule}
+        self.assertTrue(EXPECTED_PROMETHEUS_ALERTS.issubset(alert_names))
 
     def test_on_stop(self):
         """Test on-stop event handler."""
@@ -2136,6 +2176,7 @@ class TestOtelMetricsRelation(unittest.TestCase):
 
         harness = Harness(LivepatchCharm)
         self.addCleanup(harness.cleanup)
+        harness.set_model_name("livepatch")
         harness.add_oci_resource("livepatch-server-image")
         harness.add_oci_resource("livepatch-schema-upgrade-tool-image")
         harness.set_leader(True)
@@ -2323,3 +2364,40 @@ class TestOtelMetricsRelation(unittest.TestCase):
         self.assertEqual(env["LP_OTEL_METRICS_SERVICE_NAME"], "my-livepatch")
         self.assertEqual(env["LP_OTEL_METRICS_EXPORT_INTERVAL"], "30s")
         self.assertEqual(env["LP_OTEL_METRICS_EXPORT_TIMEOUT"], "10s")
+
+    def test_enabled_no_relation_sets_blocked_status(self):
+        """otel-metrics.enabled=True with no send-otlp relation sets BlockedStatus."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "otel-metrics.enabled": True,
+                }
+            )
+
+        self.assertIsInstance(harness.charm.unit.status, BlockedStatus)
+        self.assertIn("send-otlp", harness.charm.unit.status.message)
+
+    def test_enabled_relation_no_data_sets_waiting_status(self):
+        """otel-metrics.enabled=True with a send-otlp relation that has no endpoint data yet sets WaitingStatus."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        # Add relation but do NOT populate remote app data, simulating the remote not ready yet.
+        harness.add_relation("send-otlp", "otelcol")
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "otel-metrics.enabled": True,
+                }
+            )
+
+        self.assertIsInstance(harness.charm.unit.status, WaitingStatus)
+        self.assertIn("send-otlp", harness.charm.unit.status.message)

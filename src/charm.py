@@ -13,7 +13,7 @@ from urllib.parse import ParseResult, urlparse, urlunparse
 
 import pgsql
 import yaml
-from charmlibs.interfaces.otlp import OtlpRequirer
+from charmlibs.interfaces.otlp import OtlpRequirer, RuleStore
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder, LogProxyConsumer
@@ -21,6 +21,7 @@ from charms.nginx_ingress_integrator.v0.nginx_route import require_nginx_route
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.tempo_coordinator_k8s.v0.tracing import ProtocolNotRequestedError, TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
+from cosl.juju_topology import JujuTopology
 from ops import pebble
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationChangedEvent, RelationDepartedEvent, RelationEvent
 from ops.main import main
@@ -38,6 +39,7 @@ METRICS_DB_NAME = "livepatch-metrics-db"
 LOG_FILE = "/var/log/livepatch"
 LOGROTATE_CONFIG_PATH = "/etc/logrotate.d/livepatch"
 LIVEPATCH_SERVICE_NAME = "livepatch"
+PROMETHEUS_ALERT_RULES_PATH = pathlib.Path(__file__).parent / "prometheus_alert_rules"
 
 DATABASE_RELATION = "database"
 DATABASE_RELATION_LEGACY = "database-legacy"
@@ -177,12 +179,16 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_tracing_endpoint_removed)
 
         # OTLP metrics
+        otel_metrics_rules = RuleStore(JujuTopology.from_charm(self))
+        otel_metrics_rules.add_promql_path(PROMETHEUS_ALERT_RULES_PATH)
         self.otel_metrics = OtlpRequirer(
             self,
             relation_name=OTEL_METRICS_RELATION,
             protocols=["grpc", "http"],
             telemetries=["metrics"],
+            rules=otel_metrics_rules,
         )
+        self.framework.observe(self.on.send_otlp_relation_created, self._on_otel_metrics_relation_created)
         self.framework.observe(self.on.send_otlp_relation_changed, self._on_otel_metrics_relation_changed)
         self.framework.observe(self.on.send_otlp_relation_broken, self._on_otel_metrics_relation_broken)
 
@@ -507,6 +513,19 @@ class LivepatchCharm(CharmBase):
                 self.unit.status = BlockedStatus(error_msg)
                 LOGGER.warning(error_msg)
                 return
+
+        if self.config.get("otel-metrics.enabled") and not self._get_otel_metrics_endpoint():
+            if self.model.get_relation(OTEL_METRICS_RELATION) is not None:
+                # Relation exists but remote app hasn't published endpoint data yet; wait for it.
+                wait_msg = "⧖ Waiting for send-otlp relation data."
+                self.unit.status = WaitingStatus(wait_msg)
+                LOGGER.info(wait_msg)
+                self._defer(event)
+            else:
+                error_msg = "✘ otel-metrics.enabled requires a send-otlp relation."
+                self.unit.status = BlockedStatus(error_msg)
+                LOGGER.warning(error_msg)
+            return
 
         update_config_environment_layer = {
             "services": {
@@ -856,8 +875,13 @@ class LivepatchCharm(CharmBase):
         """Handle tracing endpoint-removed event."""
         self._update_workload_container_config(event)
 
+    def _on_otel_metrics_relation_created(self, event):
+        """Handle send-otlp relation-created event by publishing alert rules."""
+        self.otel_metrics.publish()
+
     def _on_otel_metrics_relation_changed(self, event):
         """Handle send-otlp relation events."""
+        self.otel_metrics.publish()
         self._update_workload_container_config(event)
 
     def _on_otel_metrics_relation_broken(self, event):

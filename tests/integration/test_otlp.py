@@ -4,10 +4,12 @@
 
 """Integration tests for the OTLP metrics relation."""
 
+import json
 import logging
 
 import pytest
 import yaml
+from cosl.utils import LZMABase64
 from fixtures import deploy_package_if_needed
 from helpers import ACTIVE_STATUS, APP_NAME
 from pytest_operator.plugin import OpsTest
@@ -32,6 +34,27 @@ async def _get_pebble_env(ops_test: OpsTest) -> dict:
     assert rc == 0, f"pebble plan failed: {stderr}"
     plan = yaml.safe_load(stdout)
     return plan.get("services", {}).get("livepatch", {}).get("environment", {})
+
+
+async def _get_published_prometheus_alert_names(ops_test: OpsTest) -> set:
+    """Return the set of Prometheus alert names livepatch published on the send-otlp relation."""
+    # The rules are written to livepatch's own app databag, so they are visible as
+    # application-data from the collector side (receive-otlp endpoint).
+    rc, stdout, stderr = await ops_test.juju("show-unit", f"{OTEL_COLLECTOR_APP}/0", "--format=yaml")
+    assert rc == 0, f"show-unit failed: {stderr}"
+    unit_data = yaml.safe_load(stdout)[f"{OTEL_COLLECTOR_APP}/0"]
+    app_data: dict = next(
+        (
+            rel.get("application-data", {})
+            for rel in unit_data.get("relation-info", [])
+            if rel.get("endpoint") == COLLECTOR_RECEIVE_OTLP_ENDPOINT
+        ),
+        {},
+    )
+    assert "rules" in app_data, f"no alert rules published on {COLLECTOR_RECEIVE_OTLP_ENDPOINT}: {app_data}"
+    rules = json.loads(LZMABase64.decompress(json.loads(app_data["rules"])))
+    groups = rules["promql"].get("groups", [])
+    return {rule["alert"] for group in groups for rule in group.get("rules", []) if "alert" in rule}
 
 
 @pytest.mark.asyncio
@@ -91,6 +114,23 @@ async def test_otel_metrics_env_vars_populated(ops_test: OpsTest):
         env.get("LP_OTEL_METRICS_PROTOCOL"),
         env.get("LP_OTEL_METRICS_INSECURE"),
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.abort_on_fail
+async def test_prometheus_alert_rules_published(ops_test: OpsTest):
+    """Test that livepatch publishes its Prometheus alert rules over the send-otlp relation."""
+    alert_names = await _get_published_prometheus_alert_names(ops_test)
+    expected = {
+        "LivepatchDatabaseResponseTimeHigh",
+        "LivepatchDatabaseErrorsHigh",
+        "LivepatchEndpointLatencyHigh",
+        "LivepatchContractsServerErrorsHigh",
+        "LivepatchContractsTokenErrorsHigh",
+    }
+    assert expected.issubset(
+        alert_names
+    ), f"published Prometheus alert rules {alert_names} should include all livepatch alerts {expected}"
 
 
 @pytest.mark.asyncio

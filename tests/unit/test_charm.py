@@ -2364,3 +2364,40 @@ class TestOtelMetricsRelation(unittest.TestCase):
         self.assertEqual(env["LP_OTEL_METRICS_SERVICE_NAME"], "my-livepatch")
         self.assertEqual(env["LP_OTEL_METRICS_EXPORT_INTERVAL"], "30s")
         self.assertEqual(env["LP_OTEL_METRICS_EXPORT_TIMEOUT"], "10s")
+
+    def test_enabled_no_relation_sets_blocked_status(self):
+        """otel-metrics.enabled=True with no send-otlp relation sets BlockedStatus."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "otel-metrics.enabled": True,
+                }
+            )
+
+        self.assertIsInstance(harness.charm.unit.status, BlockedStatus)
+        self.assertIn("send-otlp", harness.charm.unit.status.message)
+
+    def test_enabled_relation_no_data_sets_waiting_status(self):
+        """otel-metrics.enabled=True with a send-otlp relation that has no endpoint data yet sets WaitingStatus."""
+        harness = self._start_harness()
+        harness.enable_hooks()
+
+        # Add relation but do NOT populate remote app data, simulating the remote not ready yet.
+        harness.add_relation("send-otlp", "otelcol")
+
+        with patch("src.charm.LivepatchCharm.migration_is_required", return_value=False):
+            harness.update_config(
+                {
+                    "server.url-template": "http://localhost/{filename}",
+                    "server.is-hosted": True,
+                    "otel-metrics.enabled": True,
+                }
+            )
+
+        self.assertIsInstance(harness.charm.unit.status, WaitingStatus)
+        self.assertIn("send-otlp", harness.charm.unit.status.message)

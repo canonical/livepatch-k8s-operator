@@ -477,9 +477,16 @@ class LivepatchCharm(CharmBase):
                 return
 
         if self.config.get("otel-metrics.enabled") and not self._get_otel_metrics_endpoint():
-            error_msg = "✘ otel-metrics.enabled requires a send-otlp relation."
-            self.unit.status = BlockedStatus(error_msg)
-            LOGGER.warning(error_msg)
+            if self.model.get_relation(OTEL_METRICS_RELATION) is not None:
+                # Relation exists but remote app hasn't published endpoint data yet; wait for it.
+                wait_msg = "⧖ Waiting for send-otlp relation data."
+                self.unit.status = WaitingStatus(wait_msg)
+                LOGGER.info(wait_msg)
+                self._defer(event)
+            else:
+                error_msg = "✘ otel-metrics.enabled requires a send-otlp relation."
+                self.unit.status = BlockedStatus(error_msg)
+                LOGGER.warning(error_msg)
             return
 
         update_config_environment_layer = {

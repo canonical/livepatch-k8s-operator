@@ -89,6 +89,7 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.on.livepatch_relation_changed, self.on_peer_relation_changed)
         self.framework.observe(self.on.config_changed, self.on_config_changed)
         self.framework.observe(self.on.update_status, self.on_update_status)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
         self.framework.observe(self.on.leader_elected, self.on_leader_elected)
         self.framework.observe(self.on.livepatch_pebble_ready, self.on_pebble_ready)
         self.framework.observe(self.on.start, self.on_start)
@@ -216,6 +217,10 @@ class LivepatchCharm(CharmBase):
             jobs=[{"static_configs": [{"targets": [f"*:{SERVER_PORT}"]}]}],
             refresh_event=self.on.config_changed,
             relation_name="metrics-endpoint",
+            # Empty path disables alert rule publishing on this relation (default would load from
+            # src/prometheus_alert_rules/). Rules are sent exclusively via send-otlp to avoid
+            # duplicate rule evaluation when both relations point to the same otelcol.
+            alert_rules_path="",
         )
 
         # Grafana dashboard relation
@@ -237,6 +242,16 @@ class LivepatchCharm(CharmBase):
             LOGGER.warning("State is not ready")
             return
         self._update_workload_container_config(event)
+
+    def _on_upgrade_charm(self, event):
+        """Handle upgrade-charm hook: runs on each unit when a new charm revision is deployed.
+
+        Alert rules are re-published here because juju refresh does not trigger any relation
+        events on existing relations. Without this, updated alert rules in a new charm revision
+        would never be pushed to the OTLP provider's databag until the relation is removed and
+        re-added.
+        """
+        self.otel_metrics.publish()
 
     def on_config_changed(self, event):
         """Handle config-changed hook: refresh ingress method and reconfigure the workload."""

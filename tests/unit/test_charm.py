@@ -203,7 +203,8 @@ class TestCharm(unittest.TestCase):
         databag_before = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
         self.assertNotIn("rules", databag_before)
 
-        self.harness.charm._on_upgrade_charm(None)
+        with patch("subprocess.check_call", return_value=None):  # suppress pgsql's leader-set call
+            self.harness.charm.on.upgrade_charm.emit()
 
         # After upgrade: rules are present in the databag.
         databag_after = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
@@ -218,7 +219,8 @@ class TestCharm(unittest.TestCase):
         self.harness.set_leader(True)
 
         # Should not raise
-        self.harness.charm._on_upgrade_charm(None)
+        with patch("subprocess.check_call", return_value=None):  # suppress pgsql's leader-set call
+            self.harness.charm.on.upgrade_charm.emit()
 
     def test_on_stop(self):
         """Test on-stop event handler."""

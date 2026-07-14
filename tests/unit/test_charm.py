@@ -172,6 +172,24 @@ class TestCharm(unittest.TestCase):
         alert_names = {rule["alert"] for group in groups for rule in group.get("rules", []) if "alert" in rule}
         self.assertTrue(EXPECTED_PROMETHEUS_ALERTS.issubset(alert_names))
 
+    def test_alert_rules_not_published_on_metrics_endpoint(self):
+        """Alert rules are not published on the metrics-endpoint relation.
+
+        Rules are sent exclusively via send-otlp; the metrics-endpoint relation is used
+        only for scrape job configuration to avoid duplicate rule evaluation in the backend.
+        """
+        self.harness.set_leader(True)
+        rel_id = self.harness.add_relation("metrics-endpoint", "prometheus-k8s")
+        self.harness.add_relation_unit(rel_id, "prometheus-k8s/0")
+
+        self.harness.charm.metrics_endpoint.set_scrape_job_spec()
+
+        databag = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
+        # Verify the provider actually ran and wrote scrape data.
+        self.assertIn("scrape_jobs", databag)
+        # Verify alert rules were not included.
+        self.assertNotIn("alert_rules", databag)
+
     def test_upgrade_charm_republishes_alert_rules(self):
         """Alert rules are re-published to the send-otlp databag on upgrade-charm.
 

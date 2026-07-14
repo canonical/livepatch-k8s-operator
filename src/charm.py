@@ -76,7 +76,7 @@ class LivepatchCharm(CharmBase):
     traefik-k8s).
     """
 
-    def __init__(self, *args):
+    def __init__(self, *args):  # pylint: disable=too-many-statements
         """Initialise the charm, register event observers, and set up integrations."""
         super().__init__(*args)
         setup_log_redaction()

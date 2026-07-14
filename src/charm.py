@@ -217,10 +217,11 @@ class LivepatchCharm(CharmBase):
             jobs=[{"static_configs": [{"targets": [f"*:{SERVER_PORT}"]}]}],
             refresh_event=self.on.config_changed,
             relation_name="metrics-endpoint",
-            # Empty path disables alert rule publishing on this relation (default would load from
-            # src/prometheus_alert_rules/). Rules are sent exclusively via send-otlp to avoid
+            # Non-existent path disables alert rule publishing on this relation (default would load
+            # from src/prometheus_alert_rules/). The library raises InvalidAlertRulePathError which
+            # it catches internally and no-ops. Rules are sent exclusively via send-otlp to avoid
             # duplicate rule evaluation when both relations point to the same otelcol.
-            alert_rules_path="",
+            alert_rules_path="./no_prometheus_alert_rules",
         )
 
         # Grafana dashboard relation

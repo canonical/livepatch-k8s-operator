@@ -172,6 +172,56 @@ class TestCharm(unittest.TestCase):
         alert_names = {rule["alert"] for group in groups for rule in group.get("rules", []) if "alert" in rule}
         self.assertTrue(EXPECTED_PROMETHEUS_ALERTS.issubset(alert_names))
 
+    def test_alert_rules_not_published_on_metrics_endpoint(self):
+        """Alert rules are not published on the metrics-endpoint relation.
+
+        Rules are sent exclusively via send-otlp; the metrics-endpoint relation is used
+        only for scrape job configuration to avoid duplicate rule evaluation in the backend.
+        """
+        self.harness.set_leader(True)
+        rel_id = self.harness.add_relation("metrics-endpoint", "prometheus-k8s")
+        self.harness.add_relation_unit(rel_id, "prometheus-k8s/0")
+
+        self.harness.charm.metrics_endpoint.set_scrape_job_spec()
+
+        databag = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
+        # Verify the provider actually ran and wrote scrape data.
+        self.assertIn("scrape_jobs", databag)
+        # Verify alert rules were not included.
+        self.assertNotIn("alert_rules", databag)
+
+    def test_upgrade_charm_republishes_alert_rules(self):
+        """Alert rules are re-published to the send-otlp databag on upgrade-charm.
+
+        Simulates the case where a charm was deployed without alert rules (empty databag)
+        and is then upgraded to a revision that includes them.
+        """
+        self.harness.set_leader(True)
+        rel_id = self.harness.add_relation("send-otlp", "opentelemetry-collector-k8s")
+
+        # Before upgrade: relation exists but databag is empty (no rules published yet).
+        databag_before = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
+        self.assertNotIn("rules", databag_before)
+
+        with patch("subprocess.check_call", return_value=None):  # suppress pgsql's leader-set call
+            self.harness.charm.on.upgrade_charm.emit()
+
+        # After upgrade: rules are present in the databag.
+        databag_after = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
+        self.assertIn("rules", databag_after)
+        decoded = json.loads(LZMABase64.decompress(json.loads(databag_after["rules"])))
+        groups = decoded["promql"].get("groups", [])
+        alert_names = {rule["alert"] for group in groups for rule in group.get("rules", []) if "alert" in rule}
+        self.assertTrue(EXPECTED_PROMETHEUS_ALERTS.issubset(alert_names))
+
+    def test_upgrade_charm_no_otlp_relation_does_not_error(self):
+        """upgrade-charm completes without error when no send-otlp relation exists."""
+        self.harness.set_leader(True)
+
+        # Should not raise
+        with patch("subprocess.check_call", return_value=None):  # suppress pgsql's leader-set call
+            self.harness.charm.on.upgrade_charm.emit()
+
     def test_on_stop(self):
         """Test on-stop event handler."""
         self.start_container()

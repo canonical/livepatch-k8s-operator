@@ -7,7 +7,7 @@ on:
 jobs:
   integration-test:
     name: Integration tests (MicroK8s controller)
-    runs-on: self-hosted-linux-amd64-jammy-xlarge
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -54,7 +54,7 @@ jobs:
         
   integration-test-metrics-db:
     name: TimescaleDB Integration tests (MicroK8s controller)
-    runs-on: self-hosted-linux-amd64-jammy-xlarge
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -98,7 +98,7 @@ jobs:
 
   integration-test-ingress:
     name: Ingress integration tests (MicroK8s controller)
-    runs-on: self-hosted-linux-amd64-jammy-xlarge
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -138,7 +138,7 @@ jobs:
 
   integration-test-otlp:
     name: OpenTelemetry Collector integration tests (MicroK8s controller)
-    runs-on: self-hosted-linux-amd64-jammy-xlarge
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -173,7 +173,7 @@ jobs:
 
   integration-test-airgapped:
     name: Airgapped integration tests (LXD controller)
-    runs-on: self-hosted-linux-amd64-jammy-xlarge
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout

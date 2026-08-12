@@ -226,6 +226,10 @@ options:
         - swift
         - postgres
         - s3
+        - gcs
+        - azure
+        - ibm
+        - oracle
 
       When using "postgres" for storage, the charm uses the database relation
       automatically with the default database name "livepatch". A custom
@@ -295,11 +299,157 @@ options:
     type: boolean
   patch-storage.s3-access-key:
     default: ""
-    description: AWS programmatic API access key.
+    description: |
+      AWS programmatic API access key. Must be set together with patch-storage.s3-secret-key.
+      When both are omitted, the AWS SDK's default credential chain is used instead, which
+      includes credentials bound to the VM/instance the server runs on.
     type: string
   patch-storage.s3-secret-key:
     default: ""
-    description: AWS programmatic API secret key.
+    description: AWS programmatic API secret key, used together with patch-storage.s3-access-key.
+    type: string
+  patch-storage.s3-use-path-style:
+    default: false
+    description: |
+      Whether to use path-style S3 URLs (https://s3.amazonaws.com/BUCKET/KEY) instead of
+      virtual-hosted-style URLs (https://BUCKET.s3.amazonaws.com/KEY). Required for some
+      S3-compatible services (e.g. MinIO), and not needed for AWS S3.
+    type: boolean
+  patch-storage.s3-assume-role-arn:
+    default: ""
+    description: |
+      An optional IAM role ARN to assume via STS. When set, the resolved AWS credentials
+      are used to assume this role via STS instead of being used directly.
+    type: string
+  patch-storage.gcs-bucket:
+    default: ""
+    description: The Google Cloud Storage bucket to store patches within.
+    type: string
+  patch-storage.gcs-credentials-file:
+    default: ""
+    description: |
+      Path to a Google Cloud service account credentials JSON file. When omitted (along with
+      patch-storage.gcs-credentials-json), Application Default Credentials are used instead,
+      which includes credentials bound to the VM (GCE metadata service, workload identity, etc).
+    type: string
+  patch-storage.gcs-credentials-json:
+    default: ""
+    description: |
+      Google Cloud service account credentials, as a JSON string. When omitted (along with
+      patch-storage.gcs-credentials-file), Application Default Credentials are used instead.
+    type: string
+  patch-storage.gcs-impersonate-service-account:
+    default: ""
+    description: |
+      An optional service account email to impersonate. When set, the resolved credentials
+      are used to impersonate this service account instead of being used directly.
+    type: string
+  patch-storage.azure-container:
+    default: ""
+    description: The Azure Blob Storage container to store patches within.
+    type: string
+  patch-storage.azure-account-name:
+    default: ""
+    description: |
+      The Azure Storage account name. Required unless patch-storage.azure-connection-string
+      is set, which already carries the account name and key.
+    type: string
+  patch-storage.azure-account-key:
+    default: ""
+    description: |
+      The Azure Storage account key, used together with patch-storage.azure-account-name for
+      shared key authentication.
+    type: string
+  patch-storage.azure-connection-string:
+    default: ""
+    description: |
+      An Azure Storage connection string. When set, this is used instead of
+      patch-storage.azure-account-name/patch-storage.azure-account-key for authentication.
+    type: string
+  patch-storage.azure-tenant-id:
+    default: ""
+    description: |
+      The Entra ID (Azure AD) tenant ID, used together with patch-storage.azure-client-id and
+      patch-storage.azure-client-secret for service principal authentication.
+    type: string
+  patch-storage.azure-client-id:
+    default: ""
+    description: The Entra ID (Azure AD) service principal's client ID.
+    type: string
+  patch-storage.azure-client-secret:
+    default: ""
+    description: The Entra ID (Azure AD) service principal's client secret.
+    type: string
+  patch-storage.azure-managed-identity-client-id:
+    default: ""
+    description: |
+      When patch-storage.azure-account-name, patch-storage.azure-connection-string, and the
+      service principal fields are all omitted, a managed identity bound to the VM is used
+      instead. By default this is the VM's system-assigned managed identity; set this to the
+      client ID of a user-assigned managed identity to use that one instead.
+    type: string
+  patch-storage.ibm-bucket:
+    default: ""
+    description: The IBM Cloud Object Storage bucket to store patches within.
+    type: string
+  patch-storage.ibm-endpoint:
+    default: ""
+    description: The IBM Cloud Object Storage API endpoint.
+    type: string
+  patch-storage.ibm-region:
+    default: ""
+    description: The IBM Cloud region for this Object Storage instance.
+    type: string
+  patch-storage.ibm-access-key:
+    default: ""
+    description: |
+      HMAC access key ID. Must be set together with patch-storage.ibm-secret-key. When
+      omitted, the IAM API key or ambient VPC Instance Metadata Service credentials are
+      used instead.
+    type: string
+  patch-storage.ibm-secret-key:
+    default: ""
+    description: HMAC secret access key, used together with patch-storage.ibm-access-key.
+    type: string
+  patch-storage.ibm-api-key:
+    default: ""
+    description: |
+      IAM API key. Must be set together with patch-storage.ibm-service-instance-id. Used
+      when HMAC credentials are not configured.
+    type: string
+  patch-storage.ibm-service-instance-id:
+    default: ""
+    description: IBM Cloud service instance ID, used together with patch-storage.ibm-api-key.
+    type: string
+  patch-storage.ibm-trusted-profile-id:
+    default: ""
+    description: |
+      When neither HMAC keys nor an IAM API key are configured, the ambient VPC Instance
+      Metadata Service is used instead. This optionally selects which trusted profile to
+      use; when omitted, the instance's default trusted profile is used.
+    type: string
+  patch-storage.oracle-bucket:
+    default: ""
+    description: The Oracle Cloud Infrastructure Object Storage bucket to store patches within.
+    type: string
+  patch-storage.oracle-namespace:
+    default: ""
+    description: The Oracle Cloud Infrastructure Object Storage namespace.
+    type: string
+  patch-storage.oracle-region:
+    default: ""
+    description: The Oracle Cloud Infrastructure region for this Object Storage instance.
+    type: string
+  patch-storage.oracle-config-file:
+    default: ""
+    description: |
+      Path to an OCI config file for authentication. When omitted (along with
+      patch-storage.oracle-profile), instance principal authentication is used instead,
+      bound to the OCI compute instance the server runs on.
+    type: string
+  patch-storage.oracle-profile:
+    default: ""
+    description: The profile name to use from the OCI config file.
     type: string
   patch-cache.enabled:
     default: false

@@ -25,6 +25,7 @@ def _make_record(msg, *args, exc_info=None) -> logging.LogRecord:
     return record
 
 
+# pylint: disable=too-many-public-methods
 class TestRedactFunction(unittest.TestCase):
     """Tests for the _redact() helper function directly."""
 

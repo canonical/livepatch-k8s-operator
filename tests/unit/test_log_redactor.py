@@ -191,6 +191,20 @@ class TestRedactFunction(unittest.TestCase):
         self.assertIn(_REDACTED, result)
         self.assertNotIn("secretvalue", result)
 
+    def test_lp_gcs_credentials_json_with_spaces_fully_redacted(self):
+        """A value containing whitespace (e.g. JSON credentials) is fully redacted, not truncated."""
+        result = _redact('LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON={"type": "service_account", "project_id": "my-project"}')
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("service_account", result)
+        self.assertNotIn("project_id", result)
+
+    def test_lp_sensitive_env_var_followed_by_another_on_same_line(self):
+        """A sensitive value with spaces stops before a subsequent KEY=value pair on the same line."""
+        result = _redact("LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON=a b c LP_OTHER_VAR=untouched")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("a b c", result)
+        self.assertIn("LP_OTHER_VAR=untouched", result)
+
     def test_innocent_text_untouched(self):
         """A message with no sensitive data is returned unchanged."""
         msg = "workload container not ready - deferring"

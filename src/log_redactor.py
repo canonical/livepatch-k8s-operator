@@ -79,7 +79,9 @@ _SENSITIVE_ENV_VAR_PATTERN = re.compile(
     r"|LP_DATABASE_CONNECTION_STRING"
     r")"
     r"(?P<sep>=)"
-    r"(?P<value>\S+)",
+    # Non-greedy: stop at end of line/string, or before the next KEY=value pair,
+    # so values containing whitespace (e.g. JSON credentials) are fully redacted.
+    r"(?P<value>.+?)(?=\s+[A-Z][A-Z0-9_]*=|\n|$)",
     re.IGNORECASE,
 )
 

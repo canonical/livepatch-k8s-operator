@@ -221,6 +221,20 @@ class TestRedactFunction(unittest.TestCase):
         self.assertNotIn("MIIEvQIBADANBgkqhkiG9w0BAQ", result)
         self.assertIn("LP_OTHER_VAR=untouched", result)
 
+    def test_lp_multiline_credentials_with_base64_padding_fully_redacted(self):
+        """A base64/PEM line ending in '==' padding isn't mistaken for a KEY=value boundary."""
+        msg = "LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON=-----BEGIN PRIVATE KEY-----\nABCD==\n-----END PRIVATE KEY-----\nLP_OTHER_VAR=untouched"
+        result = _redact(msg)
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("ABCD==", result)
+        self.assertNotIn("BEGIN PRIVATE KEY", result)
+        self.assertIn("LP_OTHER_VAR=untouched", result)
+
+    def test_lp_sensitive_value_trailing_whitespace_preserved(self):
+        """Trailing whitespace/newline at the end of the message is not absorbed into the redaction."""
+        result = _redact("LP_PATCH_STORAGE_S3_SECRET_KEY=secretvalue  \n")
+        self.assertEqual(result, "LP_PATCH_STORAGE_S3_SECRET_KEY=***REDACTED***  \n")
+
     def test_innocent_text_untouched(self):
         """A message with no sensitive data is returned unchanged."""
         msg = "workload container not ready - deferring"

@@ -79,10 +79,11 @@ _SENSITIVE_ENV_VAR_PATTERN = re.compile(
     r"|LP_DATABASE_CONNECTION_STRING"
     r")"
     r"(?P<sep>=)"
-    # Non-greedy: stop at end of line/string, or before the next KEY=value pair,
-    # so values containing whitespace (e.g. JSON credentials) are fully redacted.
-    r"(?P<value>.+?)(?=\s+[A-Z][A-Z0-9_]*=|\n|$)",
-    re.IGNORECASE,
+    # Non-greedy, spanning newlines (DOTALL): stop only at end of string, or right
+    # before a line that looks like a fresh KEY=value assignment, so values that
+    # span multiple lines (PEM keys, pretty-printed JSON) are fully redacted too.
+    r"(?P<value>.+?)(?=\s+[A-Z][A-Z0-9_]*=|$)",
+    re.IGNORECASE | re.DOTALL,
 )
 
 _PATTERNS = [

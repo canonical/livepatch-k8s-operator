@@ -205,6 +205,22 @@ class TestRedactFunction(unittest.TestCase):
         self.assertNotIn("a b c", result)
         self.assertIn("LP_OTHER_VAR=untouched", result)
 
+    def test_lp_multiline_credentials_fully_redacted(self):
+        """A value spanning multiple lines (e.g. a PEM key embedded in pretty-printed JSON) is fully redacted."""
+        msg = (
+            'LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON={\n'
+            '  "private_key": "-----BEGIN PRIVATE KEY-----\n'
+            "MIIEvQIBADANBgkqhkiG9w0BAQ\n"
+            '-----END PRIVATE KEY-----"\n'
+            "}\n"
+            "LP_OTHER_VAR=untouched"
+        )
+        result = _redact(msg)
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("BEGIN PRIVATE KEY", result)
+        self.assertNotIn("MIIEvQIBADANBgkqhkiG9w0BAQ", result)
+        self.assertIn("LP_OTHER_VAR=untouched", result)
+
     def test_innocent_text_untouched(self):
         """A message with no sensitive data is returned unchanged."""
         msg = "workload container not ready - deferring"

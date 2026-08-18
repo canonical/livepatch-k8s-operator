@@ -301,8 +301,10 @@ options:
     default: ""
     description: |
       AWS programmatic API access key. Must be set together with patch-storage.s3-secret-key.
-      When both are omitted, the AWS SDK's default credential chain is used instead, which
-      includes credentials bound to the VM/instance the server runs on.
+      When both are omitted, the AWS SDK's default credential chain is used instead. Note that
+      this workload runs in a pod, not a VM, so ambient credentials (e.g. an EC2 instance role)
+      are not available unless IAM Roles for Service Accounts (IRSA) has been configured
+      separately for the workload's service account; otherwise, these keys must be set.
     type: string
   patch-storage.s3-secret-key:
     default: ""
@@ -329,8 +331,10 @@ options:
     default: ""
     description: |
       Path to a Google Cloud service account credentials JSON file. When omitted (along with
-      patch-storage.gcs-credentials-json), Application Default Credentials are used instead,
-      which includes credentials bound to the VM (GCE metadata service, workload identity, etc).
+      patch-storage.gcs-credentials-json), Application Default Credentials are used instead.
+      Note that this workload runs in a pod, not a VM, so ambient credentials (e.g. the GCE
+      metadata service) are not available unless GKE Workload Identity has been configured
+      separately for the workload's service account; otherwise, credentials must be set.
     type: string
   patch-storage.gcs-credentials-json:
     default: ""
@@ -384,9 +388,10 @@ options:
     default: ""
     description: |
       When patch-storage.azure-account-name, patch-storage.azure-connection-string, and the
-      service principal fields are all omitted, a managed identity bound to the VM is used
-      instead. By default this is the VM's system-assigned managed identity; set this to the
-      client ID of a user-assigned managed identity to use that one instead.
+      service principal fields are all omitted, a managed identity is used instead. Note that
+      this workload runs in a pod, not a VM, so a VM-bound managed identity is not available
+      unless Entra Workload ID federation has been configured separately for the workload's
+      service account; this option then selects the user-assigned identity's client ID to use.
     type: string
   patch-storage.ibm-bucket:
     default: ""
@@ -425,8 +430,10 @@ options:
     default: ""
     description: |
       When neither HMAC keys nor an IAM API key are configured, the ambient VPC Instance
-      Metadata Service is used instead. This optionally selects which trusted profile to
-      use; when omitted, the instance's default trusted profile is used.
+      Metadata Service is used instead. Note that this workload runs in a pod, not a VM, so
+      this ambient service is not available unless a Trusted Profile bound to the underlying
+      compute resource has been configured separately; this option then selects which profile
+      to assume.
     type: string
   patch-storage.oracle-bucket:
     default: ""

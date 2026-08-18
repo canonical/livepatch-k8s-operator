@@ -149,6 +149,48 @@ class TestRedactFunction(unittest.TestCase):
         self.assertIn(_REDACTED, result)
         self.assertNotIn("secretvalue", result)
 
+    def test_lp_azure_account_key_redacted(self):
+        """LP_PATCH_STORAGE_AZURE_ACCOUNT_KEY env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_AZURE_ACCOUNT_KEY=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
+    def test_lp_azure_connection_string_redacted(self):
+        """LP_PATCH_STORAGE_AZURE_CONNECTION_STRING env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_AZURE_CONNECTION_STRING=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
+    def test_lp_azure_client_secret_redacted(self):
+        """LP_PATCH_STORAGE_AZURE_CLIENT_SECRET env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_AZURE_CLIENT_SECRET=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
+    def test_lp_gcs_credentials_json_redacted(self):
+        """LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
+    def test_lp_ibm_access_key_redacted(self):
+        """LP_PATCH_STORAGE_IBM_ACCESS_KEY env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_IBM_ACCESS_KEY=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
+    def test_lp_ibm_secret_key_redacted(self):
+        """LP_PATCH_STORAGE_IBM_SECRET_KEY env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_IBM_SECRET_KEY=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
+    def test_lp_ibm_api_key_redacted(self):
+        """LP_PATCH_STORAGE_IBM_API_KEY env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_IBM_API_KEY=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
     def test_innocent_text_untouched(self):
         """A message with no sensitive data is returned unchanged."""
         msg = "workload container not ready - deferring"

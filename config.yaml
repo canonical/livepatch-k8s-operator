@@ -111,9 +111,9 @@ options:
       Comma separated list of accepted JWT signature algorithms.
       Supported values: RS256, RS384, RS512, ES256, ES384, ES512.
     type: string
-  auth.oauth.allowed-email-ids:
+  auth.oauth.allowed-cidp-groups:
     description: |
-      Comma separated list of email addresses allowed to access the admin API when OAuth is enabled.
+      Comma separated list of CIdP group names allowed to access the admin API when OAuth is enabled.
     type: string
   auth.oauth.jwks.url:
     description: |

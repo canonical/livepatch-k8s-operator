@@ -405,17 +405,6 @@ options:
     default: ""
     description: The IBM Cloud region for this Object Storage instance.
     type: string
-  patch-storage.ibm-access-key:
-    default: ""
-    description: |
-      HMAC access key ID. Must be set together with patch-storage.ibm-secret-key. When
-      omitted, the IAM API key or ambient VPC Instance Metadata Service credentials are
-      used instead.
-    type: string
-  patch-storage.ibm-secret-key:
-    default: ""
-    description: HMAC secret access key, used together with patch-storage.ibm-access-key.
-    type: string
   patch-storage.ibm-api-key:
     default: ""
     description: |

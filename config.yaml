@@ -408,8 +408,7 @@ options:
   patch-storage.ibm-api-key:
     default: ""
     description: |
-      IAM API key. Must be set together with patch-storage.ibm-service-instance-id. Used
-      when HMAC credentials are not configured.
+      IAM API key. Must be set together with patch-storage.ibm-service-instance-id.
     type: string
   patch-storage.ibm-service-instance-id:
     default: ""
@@ -418,11 +417,10 @@ options:
   patch-storage.ibm-trusted-profile-id:
     default: ""
     description: |
-      When neither HMAC keys nor an IAM API key are configured, the ambient VPC Instance
-      Metadata Service is used instead. Note that this workload runs in a pod, not a VM, so
-      this ambient service is not available unless a Trusted Profile bound to the underlying
-      compute resource has been configured separately; this option then selects which profile
-      to assume.
+      When an IAM API key is not configured, the ambient VPC Instance Metadata Service is
+      used instead. Note that this workload runs in a pod, not a VM, so this ambient service
+      is not available unless a Trusted Profile bound to the underlying compute resource
+      has been configured separately; this option then selects which profile to assume.
     type: string
   patch-storage.oracle-bucket:
     default: ""

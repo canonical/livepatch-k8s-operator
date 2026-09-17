@@ -194,7 +194,7 @@ options:
       as a config option in a Juju CLI invocation.
 
       Deprecated: this option is stored in plain text in Juju's config; prefer setting
-      the "ca" key of contracts.credentials-secret to a Juju secret instead.
+      the "ca-cert" key of contracts.credentials-secret to a Juju secret instead.
     type: string
     default: ""
   contracts.credentials-secret:
@@ -202,8 +202,8 @@ options:
       Preferred, Juju-secret-backed alternative to contracts.user/contracts.password/
       contracts.ca: any key set here takes priority over its plain-text counterpart above.
       Must be set to the URI of a Juju secret with (as applicable) "user", "password"
-      and "ca" keys. "ca" is a base64-encoded certificate of the CA that issued the
-      certificate of the contracts service (base64 of "-----BEGIN" to "-----END").
+      and "ca-cert" keys. "ca-cert" is a base64-encoded certificate of the CA that issued
+      the certificate of the contracts service (base64 of "-----BEGIN" to "-----END").
     type: secret
 
   database.connection-pool-max:

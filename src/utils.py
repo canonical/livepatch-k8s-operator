@@ -53,7 +53,7 @@ CREDENTIAL_GROUPS = {
     "contracts.credentials-secret": {
         "user": "contracts.user",
         "password": "contracts.password",
-        "ca": "contracts.ca",
+        "ca-cert": "contracts.ca",
     },
     "patch-storage.s3-credentials-secret": {
         "access-key": "patch-storage.s3-access-key",
@@ -64,6 +64,20 @@ CREDENTIAL_GROUPS = {
         "connection-string": "patch-storage.azure-connection-string",
         "client-secret": "patch-storage.azure-client-secret",
     },
+}
+
+# LP_* env var names for every config key that has a secret-backed alternative
+# (standalone or grouped). A secret revision may legitimately drop a value
+# (e.g. a group secret that stops providing a field, with no plain-text
+# fallback set), so these keys must always be explicitly present in the Pebble
+# layer, even as "", or Pebble's layer merge would leave the stale value in
+# place. See `explicit_keys` in `charm.py:get_env_vars`.
+SECRET_BACKED_ENV_VARS = {
+    "LP_" + key.replace("-", "_").replace(".", "_").upper()
+    for key in (
+        *SECRET_BACKED_CONFIG_KEYS,
+        *(target_key for field_map in CREDENTIAL_GROUPS.values() for target_key in field_map.values()),
+    )
 }
 
 

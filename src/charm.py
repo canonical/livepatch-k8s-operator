@@ -350,17 +350,22 @@ class LivepatchCharm(CharmBase):
         """
         return utils.resolve_secret_config(self, dict(self.config))
 
-    def get_env_vars(self) -> dict:
+    def get_env_vars(self, resolved_config: dict) -> dict:
         """Build the environment variable dictionary for the Livepatch Pebble layer.
 
         Merges charm config, relation data (database, tracing, OTLP metrics,
         airgapped contracts, CVE service), and proxy settings into a flat dict
         of LP_* environment variables consumed by the Livepatch server binary.
 
+        Args:
+            resolved_config: `self.resolved_config`, resolved once by the caller so
+                              a single reconciliation is consistent and only fetches
+                              each referenced secret once.
+
         Returns:
             A dict of environment variable names to their values.
         """
-        env_vars = utils.map_config_to_env_vars(self.resolved_config, self.unit.is_leader())
+        env_vars = utils.map_config_to_env_vars(resolved_config, self.unit.is_leader())
 
         env_vars["LIVEPATCH_CONFIG_LOCATION"] = "/etc/livepatch.yaml"
 
@@ -371,10 +376,10 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_CONTRACTS_URL"] = airgapped_pro_address
             # if sync-token is not provided we disable the syncing in airgapped env.
             # the sync could be enabled when chaining multiple machines in an airgapped env.
-            if not self.resolved_config.get("patch-sync.token"):
+            if not resolved_config.get("patch-sync.token"):
                 env_vars["LP_PATCH_SYNC_ENABLED"] = False
         else:
-            if not self.resolved_config.get("patch-sync.token"):
+            if not resolved_config.get("patch-sync.token"):
                 env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
             if self.config.get("patch-sync.enabled") is True:
                 # TODO: Find a better way to identify a on-prem syncing instance.
@@ -393,7 +398,7 @@ class LivepatchCharm(CharmBase):
 
         if self.config.get("patch-storage.type") == "postgres":
             postgres_patch_storage_dsn = (
-                self.resolved_config.get("patch-storage.postgres-connection-string", "") or self._state.dsn
+                resolved_config.get("patch-storage.postgres-connection-string", "") or self._state.dsn
             )
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 
@@ -432,7 +437,7 @@ class LivepatchCharm(CharmBase):
             "LP_OTEL_METRICS_OTLP_ENDPOINT",
             "LP_OTEL_METRICS_PROTOCOL",
             "LP_OTEL_METRICS_INSECURE",
-        }
+        } | utils.SECRET_BACKED_ENV_VARS
         # Set keys to empty string if they are not already set.
         for key in explicit_keys:
             env_vars.setdefault(key, "")
@@ -527,6 +532,10 @@ class LivepatchCharm(CharmBase):
             return
 
         try:
+            # Resolve secrets once for this reconciliation: reused below instead of
+            # re-fetching each referenced secret on every `resolved_config` access.
+            resolved_config = self.resolved_config
+
             # This token comes from an action rather than config so we check for it specifically.
             if not self.config.get("server.is-hosted"):
                 is_airgapped = self._get_available_pro_airgapped_server_address() is not None
@@ -534,7 +543,7 @@ class LivepatchCharm(CharmBase):
                 if (
                     not is_airgapped
                     and not self._state.resource_token
-                    and not self.resolved_config.get("patch-sync.token")
+                    and not resolved_config.get("patch-sync.token")
                 ):
                     error_msg = "✘ patch-sync token not set, run get-resource-token action"
                     self.unit.status = BlockedStatus(error_msg)
@@ -573,7 +582,7 @@ class LivepatchCharm(CharmBase):
                         "override": "merge",
                         "startup": "disabled",
                         "command": "sh -c '/usr/local/bin/livepatch-server | tee /var/log/livepatch'",
-                        "environment": self.get_env_vars(),
+                        "environment": self.get_env_vars(resolved_config),
                     },
                 },
                 "checks": {
@@ -585,10 +594,14 @@ class LivepatchCharm(CharmBase):
                 },
             }
             layer_label = "livepatch"
-            self._update_trusted_ca_certs(workload_container)
+            self._update_trusted_ca_certs(workload_container, resolved_config)
         except utils.CharmConfigInvalidError as e:
-            self.unit.status = BlockedStatus(str(e))
             LOGGER.error(str(e))
+            # Fail closed: a secret the workload depends on just became unresolvable
+            # (e.g. revoked/rotated to a bad revision), so stop serving with whatever
+            # credential was last successfully applied rather than leaving it running.
+            self._stop_service()
+            self.unit.status = BlockedStatus(str(e))
             return
         workload_container.add_layer(layer_label, update_config_environment_layer, combine=True)
         self._start_or_restart_service(workload_container)
@@ -1310,20 +1323,30 @@ class LivepatchCharm(CharmBase):
             LOGGER.info("workload container not ready - deferring")
             self._defer(event)
 
-    def _update_trusted_ca_certs(self, container: Container):
+    def _update_trusted_ca_certs(self, container: Container, resolved_config: dict):
         """Update trusted CA certificates with the cert from configuration.
 
         Livepatch needs to restart to use newly received certificates.
 
         Args:
             container (Container): The workload container, the caller must ensure that we can connect.
+            resolved_config: `self.resolved_config`, resolved once by the caller.
         """
-        if not self.resolved_config.get("contracts.ca"):
+        ca_cert = resolved_config.get("contracts.ca")
+        if not ca_cert:
             LOGGER.debug("ca config not set")
+            # A previously trusted CA may have been removed (e.g. a credentials
+            # secret rotated to a revision that no longer provides `ca`), so the
+            # stale cert must be dropped from the trust store too.
+            if container.exists(TRUSTED_CA_FILENAME):
+                container.remove_path(TRUSTED_CA_FILENAME)
+                stdout, stderr = container.exec(["update-ca-certificates", "--fresh"]).wait_output()
+                LOGGER.info("stdout update-ca-certificates: %s", stdout)
+                LOGGER.info("stderr update-ca-certificates: %s", stderr)
             return
 
         try:
-            cert = b64decode(self.resolved_config.get("contracts.ca")).decode("utf8")
+            cert = b64decode(ca_cert).decode("utf8")
         except Exception:
             LOGGER.error("failed to parse base64 value of `contracts.ca` config option")
             return

@@ -121,7 +121,7 @@ class TestCredentialGroups(unittest.TestCase):
 
     def test_group_secret_overrides_all_provided_keys(self):
         charm = _make_charm(
-            {"secret:group": {"user": "secret-user", "password": "secret-pass", "ca": "secret-ca"}}
+            {"secret:group": {"user": "secret-user", "password": "secret-pass", "ca-cert": "secret-ca"}}
         )
         config = {
             "contracts.user": "plain-user",

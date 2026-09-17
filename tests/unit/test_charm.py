@@ -955,6 +955,76 @@ settings:
         environment = plan.to_dict()["services"]["livepatch"]["environment"]
         self.assertEqual(environment["LP_PATCH_SYNC_TOKEN"], "new-token")
 
+    def test_group_secret_field_drop_clears_stale_env_var(self):
+        """Rotating a group secret to stop providing a field clears its stale env var, not just the plaintext."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"contracts.credentials-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_CONTRACTS_PASSWORD"], "secret-pass")
+
+        # New revision drops `password`; there is no plaintext contracts.password fallback set.
+        self.harness.set_secret_content(secret_id, {"user": "secret-user"})
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_CONTRACTS_PASSWORD"], "")
+
+    def test_invalid_secret_stops_service_fail_closed(self):
+        """A previously-working secret becoming unresolvable stops the service rather than keeping it running."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"value": "old-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"patch-sync.token-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        container = self.harness.model.unit.get_container("livepatch")
+        self.assertTrue(container.get_service(LIVEPATCH_SERVICE_NAME).is_running())
+
+        # Rotate to a revision missing the expected `value` key.
+        self.harness.set_secret_content(secret_id, {"not-value": "oops"})
+
+        self.assertFalse(container.get_service(LIVEPATCH_SERVICE_NAME).is_running())
+        self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
+
+    def test_ca_cert_removed_when_dropped_from_secret(self):
+        """Rotating a group secret to stop providing `ca` removes the previously trusted cert."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        self.harness.handle_exec("livepatch", [], result=0)
+        secret_id = self.harness.add_user_secret({"ca-cert": TEST_CA_CERT})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"contracts.credentials-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        root = self.harness.get_filesystem_root("livepatch")
+        ca_path = root / "usr/local/share/ca-certificates/trusted-contracts.ca.crt"
+        self.assertTrue(ca_path.exists())
+
+        # New revision drops `ca-cert` (a Juju secret can't have empty content, so it
+        # still carries an unrelated field); there is no plaintext contracts.ca fallback set.
+        self.harness.set_secret_content(secret_id, {"user": "someone"})
+
+        self.assertFalse(ca_path.exists())
+
     def test_logrotate_config_pushed(self):
         """Assure that logrotate config is pushed."""
         self.harness.enable_hooks()

@@ -27,9 +27,10 @@ parts:
       # 1. Install yq as a plain binary (not the snap: strict confinement denies
       # access to files under a non-root user's home when charmcraft builds as
       # root under --destructive-mode).
-      wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&\
+      YQ_VERSION="v4.49.2"
+      wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64 -O /usr/local/bin/yq &&\
       chmod +x /usr/local/bin/yq
-      
+
       # 2. Run the default charm build steps.
       craftctl default
 

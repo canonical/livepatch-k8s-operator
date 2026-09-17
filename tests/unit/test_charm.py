@@ -576,8 +576,11 @@ class TestCharm(unittest.TestCase):
         secret_id = self.harness.add_user_secret({"value": "secret-token"})
         self.harness.grant_secret(secret_id, APP_NAME)
 
+        seen_authorization_headers = []
+
         def make_request_side_effect(method: str, url: str, *args, **kwargs):
             if method == "POST":
+                seen_authorization_headers.append(kwargs["headers"]["Authorization"])
                 return {"machineToken": "some-machine-token"}
             if method == "GET":
                 return {"resourceToken": "some-resource-token"}
@@ -588,6 +591,8 @@ class TestCharm(unittest.TestCase):
                 "get-resource-token", {"contract-token": "ignored", "contract-token-secret": secret_id}
             )
 
+        # Assert the *secret's* token was used, not the plaintext `contract-token` param.
+        self.assertEqual(seen_authorization_headers, ["Bearer secret-token"])
         self.assertEqual(self.harness.charm._state.resource_token, "some-resource-token")
         self.assertEqual(output.results, {"result": "resource token set"})
 
@@ -885,6 +890,70 @@ settings:
         root = self.harness.get_filesystem_root("livepatch")
         cert = (root / "usr/local/share/ca-certificates/trusted-contracts.ca.crt").read_text()
         self.assertEqual(cert, "New Test CA Cert\n")
+
+    def test_config_credentials_secret_resolved_into_env_vars(self):
+        """A `contracts.credentials-secret` config secret overrides the plaintext `contracts.password`."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config(
+            {
+                "contracts.user": "plaintext-user",
+                "contracts.password": "plaintext-pass",
+                "contracts.credentials-secret": secret_id,
+            }
+        )
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_CONTRACTS_USER"], "secret-user")
+        self.assertEqual(environment["LP_CONTRACTS_PASSWORD"], "secret-pass")
+
+    def test_config_secret_missing_value_key_blocks_unit(self):
+        """A config secret that is set but lacks the expected key blocks the unit."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"not-value": "oops"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"patch-sync.token-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
+        self.assertIn("patch-sync.token-secret", self.harness.charm.unit.status.message)
+
+    def test_secret_changed_reconfigures_workload(self):
+        """Rotating a config-referenced secret's content updates the workload env on secret-changed."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"value": "old-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"patch-sync.token-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_PATCH_SYNC_TOKEN"], "old-token")
+
+        # Rotating the secret's content fires secret-changed, which the charm observes.
+        self.harness.set_secret_content(secret_id, {"value": "new-token"})
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_PATCH_SYNC_TOKEN"], "new-token")
 
     def test_logrotate_config_pushed(self):
         """Assure that logrotate config is pushed."""

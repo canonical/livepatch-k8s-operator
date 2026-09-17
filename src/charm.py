@@ -94,6 +94,9 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.on.livepatch_pebble_ready, self.on_pebble_ready)
         self.framework.observe(self.on.start, self.on_start)
         self.framework.observe(self.on.stop, self.on_stop)
+        # A secret referenced by a `type: secret` config option may rotate independently
+        # of any config change, so the workload must be reconfigured here too.
+        self.framework.observe(self.on.secret_changed, self.on_secret_changed)
 
         self.framework.observe(self.on.restart_action, self.restart_action)
         self.framework.observe(self.on.schema_upgrade_action, self.schema_upgrade_action)
@@ -282,6 +285,10 @@ class LivepatchCharm(CharmBase):
         """Handle leader-elected hook: reconfigure workload on the new leader unit."""
         self._update_workload_container_config(event)
 
+    def on_secret_changed(self, event):
+        """Handle secret-changed hook: reconfigure the workload when a referenced secret rotates."""
+        self._update_workload_container_config(event)
+
     def on_stop(self, _):
         """Handle stop hook: gracefully stop the Livepatch service."""
         self._stop_service()
@@ -386,7 +393,7 @@ class LivepatchCharm(CharmBase):
 
         if self.config.get("patch-storage.type") == "postgres":
             postgres_patch_storage_dsn = (
-                self.config.get("patch-storage.postgres-connection-string", "") or self._state.dsn
+                self.resolved_config.get("patch-storage.postgres-connection-string", "") or self._state.dsn
             )
             env_vars["LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"] = postgres_patch_storage_dsn
 

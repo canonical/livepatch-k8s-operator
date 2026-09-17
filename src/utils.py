@@ -39,6 +39,7 @@ SECRET_BACKED_CONFIG_KEYS = (
     "patch-storage.swift-api-key",
     "patch-storage.gcs-credentials-json",
     "patch-storage.ibm-api-key",
+    "patch-storage.postgres-connection-string",
     "patch-sync.token",
     "influx.token",
 )

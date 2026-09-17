@@ -318,7 +318,16 @@ options:
 
       If this is to be changed, it is expected that the database you wish to connect to is 
       created manually.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      patch-storage.postgres-connection-string-secret to a Juju secret URI instead.
     type: string
+  patch-storage.postgres-connection-string-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.postgres-connection-string:
+      takes priority over it when both are set. Must be set to the URI of a Juju secret
+      containing a "value" key with the connection string URI.
+    type: secret
   patch-storage.s3-bucket:
     default: ""
     description: The S3 bucket to store patches within.

@@ -565,6 +565,71 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.charm._state.resource_token, "some-resource-token")
         self.assertEqual(output.results, {"result": "resource token set"})
 
+    def test_get_resource_token_action__success_with_contract_token_secret(self):
+        """Test `get-resource-token` action prefers `contract-token-secret` over `contract-token`."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        del self.harness.charm._state.resource_token
+
+        secret_id = self.harness.add_user_secret({"value": "secret-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        def make_request_side_effect(method: str, url: str, *args, **kwargs):
+            if method == "POST":
+                return {"machineToken": "some-machine-token"}
+            if method == "GET":
+                return {"resourceToken": "some-resource-token"}
+            raise AssertionError("unexpected request")
+
+        with patch("utils.make_request", Mock(side_effect=make_request_side_effect)):
+            output = self.harness.run_action(
+                "get-resource-token", {"contract-token": "ignored", "contract-token-secret": secret_id}
+            )
+
+        self.assertEqual(self.harness.charm._state.resource_token, "some-resource-token")
+        self.assertEqual(output.results, {"result": "resource token set"})
+
+    def test_get_resource_token_action__failure__contract_token_secret_missing_value_key(self):
+        """Test `get-resource-token` action fails when the secret has no `value` key."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        del self.harness.charm._state.resource_token
+
+        secret_id = self.harness.add_user_secret({"other-key": "secret-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        output = self.harness.run_action("get-resource-token", {"contract-token-secret": secret_id})
+
+        self.assertEqual(
+            output.results,
+            {
+                "error": "cannot fetch the resource token: the secret must have a "
+                "`value` key with the contract token"
+            },
+        )
+
+    def test_get_resource_token_action__failure__contract_token_secret_inaccessible(self):
+        """Test `get-resource-token` action fails when the secret cannot be accessed."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        del self.harness.charm._state.resource_token
+
+        output = self.harness.run_action("get-resource-token", {"contract-token-secret": "secret:unknown"})
+
+        self.assertEqual(
+            output.results,
+            {
+                "error": "cannot fetch the resource token: could not access the `contract-token-secret` "
+                f"secret. Run `juju grant-secret <secret> {APP_NAME}` and try again."
+            },
+        )
+
     def test_emit_updated_config__failure_bad_format(self):
         """Test the scenario where `emit-updated-config` action fails due to bad yaml formatting."""
         self.harness.set_leader(True)
@@ -656,7 +721,13 @@ settings:
 
         output = self.harness.run_action("get-resource-token", {"contract-token": ""})
 
-        self.assertEqual(output.results, {"error": "cannot fetch the resource token: no contract token provided"})
+        self.assertEqual(
+            output.results,
+            {
+                "error": "cannot fetch the resource token: no contract token provided "
+                "(use `contract-token-secret` (preferred) or `contract-token`)"
+            },
+        )
 
     def test_get_resource_token_action__failure__sync_token_already_set(self):
         """Test the scenario where `get-resource-token` action fails because sync token is already set."""

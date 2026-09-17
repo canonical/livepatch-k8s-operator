@@ -333,6 +333,16 @@ class LivepatchCharm(CharmBase):
                 except Exception as e:
                     LOGGER.error(f"Failed to perform schema upgrade for {db_name}: {e}")
 
+    @property
+    def resolved_config(self) -> dict:
+        """Charm config with sensitive values resolved from Juju secrets, falling back to plaintext.
+
+        See `utils.resolve_secret_config` for the resolution rules. Recomputed on
+        every access rather than cached, since Juju config (and its secret
+        content) may change between reads within the same hook execution.
+        """
+        return utils.resolve_secret_config(self, dict(self.config))
+
     def get_env_vars(self) -> dict:
         """Build the environment variable dictionary for the Livepatch Pebble layer.
 
@@ -343,7 +353,7 @@ class LivepatchCharm(CharmBase):
         Returns:
             A dict of environment variable names to their values.
         """
-        env_vars = utils.map_config_to_env_vars(self)
+        env_vars = utils.map_config_to_env_vars(self.resolved_config, self.unit.is_leader())
 
         env_vars["LIVEPATCH_CONFIG_LOCATION"] = "/etc/livepatch.yaml"
 
@@ -354,10 +364,10 @@ class LivepatchCharm(CharmBase):
             env_vars["LP_CONTRACTS_URL"] = airgapped_pro_address
             # if sync-token is not provided we disable the syncing in airgapped env.
             # the sync could be enabled when chaining multiple machines in an airgapped env.
-            if not self.config.get("patch-sync.token"):
+            if not self.resolved_config.get("patch-sync.token"):
                 env_vars["LP_PATCH_SYNC_ENABLED"] = False
         else:
-            if not self.config.get("patch-sync.token"):
+            if not self.resolved_config.get("patch-sync.token"):
                 env_vars["LP_PATCH_SYNC_TOKEN"] = self._state.resource_token
             if self.config.get("patch-sync.enabled") is True:
                 # TODO: Find a better way to identify a on-prem syncing instance.
@@ -509,61 +519,70 @@ class LivepatchCharm(CharmBase):
             self._defer(event)
             return
 
-        # This token comes from an action rather than config so we check for it specifically.
-        if not self.config.get("server.is-hosted"):
-            is_airgapped = self._get_available_pro_airgapped_server_address() is not None
-            # blocked status if not airgapped, no resource token in the state and no sync token in the config
-            if not is_airgapped and not self._state.resource_token and not self.config.get("patch-sync.token"):
-                error_msg = "✘ patch-sync token not set, run get-resource-token action"
-                self.unit.status = BlockedStatus(error_msg)
-                LOGGER.warning(error_msg)
+        try:
+            # This token comes from an action rather than config so we check for it specifically.
+            if not self.config.get("server.is-hosted"):
+                is_airgapped = self._get_available_pro_airgapped_server_address() is not None
+                # blocked status if not airgapped, no resource token in the state and no sync token in the config
+                if (
+                    not is_airgapped
+                    and not self._state.resource_token
+                    and not self.resolved_config.get("patch-sync.token")
+                ):
+                    error_msg = "✘ patch-sync token not set, run get-resource-token action"
+                    self.unit.status = BlockedStatus(error_msg)
+                    LOGGER.warning(error_msg)
+                    return
+
+            # Then check for required config values.
+            required_settings = REQUIRED_SETTINGS.copy()
+            if self.config.get("server.is-hosted"):
+                required_settings.update(ON_PREM_REQUIRED_SETTINGS)
+
+            for setting, error_msg in required_settings.items():
+                if not self.config.get(setting):
+                    self.unit.status = BlockedStatus(error_msg)
+                    LOGGER.warning(error_msg)
+                    return
+
+            if self.config.get("otel-metrics.enabled") and not self._get_otel_metrics_endpoint():
+                if self.model.get_relation(OTEL_METRICS_RELATION) is not None:
+                    # Relation exists but remote app hasn't published endpoint data yet; wait for it.
+                    wait_msg = "⧖ Waiting for send-otlp relation data."
+                    self.unit.status = WaitingStatus(wait_msg)
+                    LOGGER.info(wait_msg)
+                    self._defer(event)
+                else:
+                    error_msg = "✘ otel-metrics.enabled requires a send-otlp relation."
+                    self.unit.status = BlockedStatus(error_msg)
+                    LOGGER.warning(error_msg)
                 return
 
-        # Then check for required config values.
-        required_settings = REQUIRED_SETTINGS.copy()
-        if self.config.get("server.is-hosted"):
-            required_settings.update(ON_PREM_REQUIRED_SETTINGS)
-
-        for setting, error_msg in required_settings.items():
-            if not self.config.get(setting):
-                self.unit.status = BlockedStatus(error_msg)
-                LOGGER.warning(error_msg)
-                return
-
-        if self.config.get("otel-metrics.enabled") and not self._get_otel_metrics_endpoint():
-            if self.model.get_relation(OTEL_METRICS_RELATION) is not None:
-                # Relation exists but remote app hasn't published endpoint data yet; wait for it.
-                wait_msg = "⧖ Waiting for send-otlp relation data."
-                self.unit.status = WaitingStatus(wait_msg)
-                LOGGER.info(wait_msg)
-                self._defer(event)
-            else:
-                error_msg = "✘ otel-metrics.enabled requires a send-otlp relation."
-                self.unit.status = BlockedStatus(error_msg)
-                LOGGER.warning(error_msg)
-            return
-
-        update_config_environment_layer = {
-            "services": {
-                LIVEPATCH_SERVICE_NAME: {
-                    "summary": "Livepatch Service",
-                    "description": "Pebble config layer for livepatch",
-                    "override": "merge",
-                    "startup": "disabled",
-                    "command": "sh -c '/usr/local/bin/livepatch-server | tee /var/log/livepatch'",
-                    "environment": self.get_env_vars(),
+            update_config_environment_layer = {
+                "services": {
+                    LIVEPATCH_SERVICE_NAME: {
+                        "summary": "Livepatch Service",
+                        "description": "Pebble config layer for livepatch",
+                        "override": "merge",
+                        "startup": "disabled",
+                        "command": "sh -c '/usr/local/bin/livepatch-server | tee /var/log/livepatch'",
+                        "environment": self.get_env_vars(),
+                    },
                 },
-            },
-            "checks": {
-                "livepatch-check": {
-                    "override": "replace",
-                    "period": "1m",
-                    "http": {"url": f"http://localhost:{SERVER_PORT}/debug/info"},
-                }
-            },
-        }
-        layer_label = "livepatch"
-        self._update_trusted_ca_certs(workload_container)
+                "checks": {
+                    "livepatch-check": {
+                        "override": "replace",
+                        "period": "1m",
+                        "http": {"url": f"http://localhost:{SERVER_PORT}/debug/info"},
+                    }
+                },
+            }
+            layer_label = "livepatch"
+            self._update_trusted_ca_certs(workload_container)
+        except utils.CharmConfigInvalidError as e:
+            self.unit.status = BlockedStatus(str(e))
+            LOGGER.error(str(e))
+            return
         workload_container.add_layer(layer_label, update_config_environment_layer, combine=True)
         self._start_or_restart_service(workload_container)
 
@@ -1153,7 +1172,13 @@ class LivepatchCharm(CharmBase):
             event.set_results({"error": "cannot fetch the resource token: peer relation not ready"})
             return
 
-        if self.config.get("patch-sync.token"):
+        try:
+            sync_token_set = self.resolved_config.get("patch-sync.token")
+        except utils.CharmConfigInvalidError as e:
+            LOGGER.error(str(e))
+            event.set_results({"error": str(e)})
+            return
+        if sync_token_set:
             LOGGER.error("patch-sync.token is already set. It should be unset before setting a resource token")
             event.set_results(
                 {"error": "patch-sync.token is already set. It should be unset before setting a resource token"}
@@ -1174,9 +1199,37 @@ class LivepatchCharm(CharmBase):
             )
             return
 
-        contract_token = event.params.get("contract-token", "")
+        contract_token_secret_id = event.params.get("contract-token-secret", "")
+        if contract_token_secret_id:
+            try:
+                contract_token_secret = self.model.get_secret(id=contract_token_secret_id)
+                contract_token = contract_token_secret.get_content(refresh=True).get(utils.SECRET_VALUE_KEY) or ""
+            except ModelError:
+                error_msg = (
+                    "cannot fetch the resource token: could not access the `contract-token-secret` "
+                    f"secret. Run `juju grant-secret <secret> {self.app.name}` and try again."
+                )
+                LOGGER.error(error_msg)
+                event.set_results({"error": error_msg})
+                return
+            if not contract_token:
+                error_msg = (
+                    "cannot fetch the resource token: the secret must have a "
+                    f"`{utils.SECRET_VALUE_KEY}` key with the contract token"
+                )
+                LOGGER.error(error_msg)
+                event.set_results({"error": error_msg})
+                return
+        else:
+            contract_token = event.params.get("contract-token", "")
+
         if not contract_token:
-            event.set_results({"error": "cannot fetch the resource token: no contract token provided"})
+            error_msg = (
+                "cannot fetch the resource token: no contract token provided "
+                "(use `contract-token-secret` (preferred) or `contract-token`)"
+            )
+            LOGGER.error(error_msg)
+            event.set_results({"error": error_msg})
             return
         proxies = utils.get_proxy_dict(self.config)
         contracts_url = self.config.get("contracts.url", "")
@@ -1258,12 +1311,12 @@ class LivepatchCharm(CharmBase):
         Args:
             container (Container): The workload container, the caller must ensure that we can connect.
         """
-        if not self.config.get("contracts.ca"):
+        if not self.resolved_config.get("contracts.ca"):
             LOGGER.debug("ca config not set")
             return
 
         try:
-            cert = b64decode(self.config.get("contracts.ca")).decode("utf8")
+            cert = b64decode(self.resolved_config.get("contracts.ca")).decode("utf8")
         except Exception:
             LOGGER.error("failed to parse base64 value of `contracts.ca` config option")
             return

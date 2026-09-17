@@ -11,7 +11,7 @@ platforms:
     build-for: [amd64]
 parts:
   charm:
-    build-packages: [git, gawk]
+    build-packages: [git, gawk, wget]
     charm-python-packages: 
     - setuptools==78.1.1
     - pip==23.2.1
@@ -24,9 +24,12 @@ parts:
     - responses==0.25.8
     - urllib3==2.6.3
     override-build: |
-      # 1. Install yq
-      sudo snap install yq
-
+      # 1. Install yq as a plain binary (not the snap: strict confinement denies
+      # access to files under a non-root user's home when charmcraft builds as
+      # root under --destructive-mode).
+      wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&\
+      chmod +x /usr/local/bin/yq
+      
       # 2. Run the default charm build steps.
       craftctl default
 

@@ -17,7 +17,7 @@ from pytest_operator.plugin import OpsTest
 logger = logging.getLogger(__name__)
 
 OTEL_COLLECTOR_APP = "opentelemetry-collector-k8s"
-OTEL_COLLECTOR_CHANNEL = "dev/edge"
+OTEL_COLLECTOR_CHANNEL = "0.130/edge"
 LIVEPATCH_SEND_OTLP_ENDPOINT = "send-otlp"
 COLLECTOR_RECEIVE_OTLP_ENDPOINT = "receive-otlp"
 

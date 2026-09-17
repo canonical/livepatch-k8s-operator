@@ -18,8 +18,14 @@ jobs:
       # pick up this file and avoid building it per test case.
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
+      - name: Set up LXD
+        run: |
+          sudo snap install lxd
+          sudo adduser $USER lxd
+          newgrp lxd
+          lxd init --auto
       - name: Build charm
-        run: sudo charmcraft pack --destructive-mode --verbosity=trace
+        run: charmcraft pack --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
@@ -60,8 +66,14 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
+      - name: Set up LXD
+        run: |
+          sudo snap install lxd
+          sudo adduser $USER lxd
+          newgrp lxd
+          lxd init --auto
       - name: Build charm
-        run: sudo charmcraft pack --destructive-mode --verbosity=trace
+        run: charmcraft pack --verbosity=trace
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
@@ -108,8 +120,14 @@ jobs:
       # pick up this file and avoid building it per test case.
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
+      - name: Set up LXD
+        run: |
+          sudo snap install lxd
+          sudo adduser $USER lxd
+          newgrp lxd
+          lxd init --auto
       - name: Build charm
-        run: sudo charmcraft pack --destructive-mode --verbosity=trace
+        run: charmcraft pack --verbosity=trace
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
@@ -144,8 +162,14 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
+      - name: Set up LXD
+        run: |
+          sudo snap install lxd
+          sudo adduser $USER lxd
+          newgrp lxd
+          lxd init --auto
       - name: Build charm
-        run: sudo charmcraft pack --destructive-mode --verbosity=trace
+        run: charmcraft pack --verbosity=trace
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3
         with:
@@ -184,8 +208,14 @@ jobs:
       # pick up this file and avoid building it per test case.
       - name: Install Charmcraft
         run: sudo snap install charmcraft --classic
+      - name: Set up LXD
+        run: |
+          sudo snap install lxd
+          sudo adduser $USER lxd
+          newgrp lxd
+          lxd init --auto
       - name: Build charm
-        run: sudo charmcraft pack --destructive-mode --verbosity=trace
+        run: charmcraft pack --verbosity=trace
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@d8217ad61c15f746727a9d41563c13e9b9fe56e3

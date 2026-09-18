@@ -8,7 +8,7 @@
 
 import pathlib
 from base64 import b64decode
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from urllib.parse import ParseResult, urlparse, urlunparse
 
 import pgsql
@@ -495,6 +495,32 @@ class LivepatchCharm(CharmBase):
             self.ingress = None
             self.unit.status = BlockedStatus(error_msg)
 
+    def _check_required_settings(self, resolved_config: dict) -> Optional[str]:
+        """Return a blocking error message if a required precondition/config value is missing.
+
+        Args:
+            resolved_config: `self.resolved_config`, resolved once by the caller.
+
+        Returns:
+            An error message string, or None if all required preconditions are met.
+        """
+        # This token comes from an action rather than config so we check for it specifically.
+        if not self.config.get("server.is-hosted"):
+            is_airgapped = self._get_available_pro_airgapped_server_address() is not None
+            # blocked if not airgapped, no resource token in the state and no sync token in the config
+            if not is_airgapped and not self._state.resource_token and not resolved_config.get("patch-sync.token"):
+                return "✘ patch-sync token not set, run get-resource-token action"
+
+        required_settings = REQUIRED_SETTINGS.copy()
+        if self.config.get("server.is-hosted"):
+            required_settings.update(ON_PREM_REQUIRED_SETTINGS)
+
+        for setting, error_msg in required_settings.items():
+            if not self.config.get(setting):
+                return error_msg
+
+        return None
+
     def _update_workload_container_config(self, event: Optional[HookEvent]):
         """Reconcile the workload container's Pebble layer with current charm state.
 
@@ -536,30 +562,11 @@ class LivepatchCharm(CharmBase):
             # re-fetching each referenced secret on every `resolved_config` access.
             resolved_config = self.resolved_config
 
-            # This token comes from an action rather than config so we check for it specifically.
-            if not self.config.get("server.is-hosted"):
-                is_airgapped = self._get_available_pro_airgapped_server_address() is not None
-                # blocked status if not airgapped, no resource token in the state and no sync token in the config
-                if (
-                    not is_airgapped
-                    and not self._state.resource_token
-                    and not resolved_config.get("patch-sync.token")
-                ):
-                    error_msg = "✘ patch-sync token not set, run get-resource-token action"
-                    self.unit.status = BlockedStatus(error_msg)
-                    LOGGER.warning(error_msg)
-                    return
-
-            # Then check for required config values.
-            required_settings = REQUIRED_SETTINGS.copy()
-            if self.config.get("server.is-hosted"):
-                required_settings.update(ON_PREM_REQUIRED_SETTINGS)
-
-            for setting, error_msg in required_settings.items():
-                if not self.config.get(setting):
-                    self.unit.status = BlockedStatus(error_msg)
-                    LOGGER.warning(error_msg)
-                    return
+            error_msg = self._check_required_settings(resolved_config)
+            if error_msg:
+                self.unit.status = BlockedStatus(error_msg)
+                LOGGER.warning(error_msg)
+                return
 
             if self.config.get("otel-metrics.enabled") and not self._get_otel_metrics_endpoint():
                 if self.model.get_relation(OTEL_METRICS_RELATION) is not None:
@@ -1177,80 +1184,79 @@ class LivepatchCharm(CharmBase):
                 return True
             raise e
 
-    def get_resource_token_action(self, event: ActionEvent):
-        """Handle the ``get-resource-token`` action: exchange a contract token for a resource token.
-
-        The resource token is stored in peer relation state and used for patch synchronisation.
-        """
+    def _check_resource_token_preconditions(self) -> Optional[str]:
+        """Return a blocking error message if `get-resource-token` cannot proceed, else None."""
         if not self.unit.is_leader():
-            LOGGER.error("cannot fetch the resource token: unit is not the leader")
-            event.set_results({"error": "cannot fetch the resource token: unit is not the leader"})
-            return
-
+            return "cannot fetch the resource token: unit is not the leader"
         if not self._state.is_ready():
-            LOGGER.error("cannot fetch the resource token: peer relation not ready")
-            event.set_results({"error": "cannot fetch the resource token: peer relation not ready"})
-            return
+            return "cannot fetch the resource token: peer relation not ready"
 
         try:
             sync_token_set = self.resolved_config.get("patch-sync.token")
         except utils.CharmConfigInvalidError as e:
-            LOGGER.error(str(e))
-            event.set_results({"error": str(e)})
-            return
+            return str(e)
         if sync_token_set:
-            LOGGER.error("patch-sync.token is already set. It should be unset before setting a resource token")
-            event.set_results(
-                {"error": "patch-sync.token is already set. It should be unset before setting a resource token"}
-            )
-            return
+            return "patch-sync.token is already set. It should be unset before setting a resource token"
 
         # If there already is an integration with the `pro-airgapped-server`
         # the user shouldn't be able to run this action, unless they remove the
         # relation.
         if self._get_available_pro_airgapped_server_address():
-            LOGGER.error(
-                "already integrated with `pro-airgapped-server`. The relation should be removed before setting a resource token"
+            return (
+                "already integrated with `pro-airgapped-server`. The relation should be removed "
+                "before setting a resource token"
             )
-            event.set_results(
-                {
-                    "error": "already integrated with `pro-airgapped-server`. The relation should be removed before setting a resource token"
-                }
-            )
-            return
 
+        return None
+
+    def _resolve_contract_token(self, event: ActionEvent) -> Tuple[Optional[str], Optional[str]]:
+        """Resolve the contract token from `contract-token-secret` (preferred) or `contract-token`.
+
+        Returns:
+            A (contract_token, error_message) tuple; exactly one element is None.
+        """
         contract_token_secret_id = event.params.get("contract-token-secret", "")
         if contract_token_secret_id:
             try:
                 contract_token_secret = self.model.get_secret(id=contract_token_secret_id)
                 contract_token = contract_token_secret.get_content(refresh=True).get(utils.SECRET_VALUE_KEY) or ""
             except ModelError:
-                error_msg = (
+                return None, (
                     "cannot fetch the resource token: could not access the `contract-token-secret` "
                     f"secret. Run `juju grant-secret <secret> {self.app.name}` and try again."
                 )
-                LOGGER.error(error_msg)
-                event.set_results({"error": error_msg})
-                return
             if not contract_token:
-                error_msg = (
+                return None, (
                     "cannot fetch the resource token: the secret must have a "
                     f"`{utils.SECRET_VALUE_KEY}` key with the contract token"
                 )
-                LOGGER.error(error_msg)
-                event.set_results({"error": error_msg})
-                return
-        else:
-            contract_token = event.params.get("contract-token", "")
+            return contract_token, None
 
+        contract_token = event.params.get("contract-token", "")
         if not contract_token:
-            error_msg = (
+            return None, (
                 "cannot fetch the resource token: no contract token provided "
                 "(use `contract-token-secret` (preferred) or `contract-token`)"
             )
+        return contract_token, None
+
+    def get_resource_token_action(self, event: ActionEvent):
+        """Handle the ``get-resource-token`` action: exchange a contract token for a resource token.
+
+        The resource token is stored in peer relation state and used for patch synchronisation.
+        """
+        error_msg = self._check_resource_token_preconditions()
+        if error_msg:
             LOGGER.error(error_msg)
             event.set_results({"error": error_msg})
             return
+
+        contract_token, error_msg = self._resolve_contract_token(event)
+        if error_msg or contract_token is None:
+            LOGGER.error(error_msg)
+            event.set_results({"error": error_msg})
+            return
+
         proxies = utils.get_proxy_dict(self.config)
         contracts_url = self.config.get("contracts.url", "")
         machine_token = utils.get_machine_token(contract_token, contracts_url=contracts_url, proxies=proxies)

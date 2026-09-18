@@ -123,7 +123,9 @@ def resolve_secret_config(charm, config: dict) -> dict:
         content = _get_secret_content(charm, secret_id, secret_key)
         value = content.get(SECRET_VALUE_KEY)
         if value is None:
-            raise CharmConfigInvalidError(f"the secret configured for `{secret_key}` must have a `{SECRET_VALUE_KEY}` key")
+            raise CharmConfigInvalidError(
+                f"the secret configured for `{secret_key}` must have a `{SECRET_VALUE_KEY}` key"
+            )
         resolved[key] = value
 
     for group_key, field_map in CREDENTIAL_GROUPS.items():

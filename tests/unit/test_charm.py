@@ -611,10 +611,7 @@ class TestCharm(unittest.TestCase):
 
         self.assertEqual(
             output.results,
-            {
-                "error": "cannot fetch the resource token: the secret must have a "
-                "`value` key with the contract token"
-            },
+            {"error": "cannot fetch the resource token: the secret must have a " "`value` key with the contract token"},
         )
 
     def test_get_resource_token_action__failure__contract_token_secret_inaccessible(self):

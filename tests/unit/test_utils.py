@@ -22,11 +22,12 @@ def _make_charm(secrets: dict) -> MagicMock:
     charm = MagicMock()
     charm.app.name = APP_NAME
 
-    def get_secret(id):  # noqa: A002 - matches ops.Model.get_secret's kwarg name
-        if id not in secrets:
-            raise ModelError(f"secret owner does not exist: {id}")
+    def get_secret(**kwargs):
+        secret_id = kwargs["id"]
+        if secret_id not in secrets:
+            raise ModelError(f"secret owner does not exist: {secret_id}")
         secret = MagicMock()
-        secret.get_content.return_value = secrets[id]
+        secret.get_content.return_value = secrets[secret_id]
         return secret
 
     charm.model.get_secret.side_effect = get_secret
@@ -37,6 +38,7 @@ class TestStandaloneSecrets(unittest.TestCase):
     """Tests for standalone `<key>-secret` resolution (SECRET_BACKED_CONFIG_KEYS)."""
 
     def test_plaintext_used_when_no_secret_set(self):
+        """With no `-secret` option set, the plaintext config value is used as-is."""
         charm = _make_charm({})
         config = {"patch-sync.token": "plaintext-token"}
 
@@ -45,6 +47,7 @@ class TestStandaloneSecrets(unittest.TestCase):
         self.assertEqual(resolved["patch-sync.token"], "plaintext-token")
 
     def test_secret_overrides_plaintext(self):
+        """A set `-secret` option takes priority over the plaintext value."""
         charm = _make_charm({"secret:1": {"value": "from-secret"}})
         config = {
             "patch-sync.token": "plaintext-token",
@@ -56,6 +59,7 @@ class TestStandaloneSecrets(unittest.TestCase):
         self.assertEqual(resolved["patch-sync.token"], "from-secret")
 
     def test_secret_option_stripped_from_result(self):
+        """The helper-only `-secret` option is not present in the resolved config."""
         charm = _make_charm({"secret:1": {"value": "from-secret"}})
         config = {"patch-sync.token-secret": "secret:1"}
 
@@ -64,6 +68,7 @@ class TestStandaloneSecrets(unittest.TestCase):
         self.assertNotIn("patch-sync.token-secret", resolved)
 
     def test_secret_missing_value_key_raises(self):
+        """A standalone secret missing the `value` key is a hard error, not treated as unset."""
         charm = _make_charm({"secret:1": {"not-value": "oops"}})
         config = {
             "patch-sync.token": "plaintext-token",
@@ -77,6 +82,7 @@ class TestStandaloneSecrets(unittest.TestCase):
         self.assertIn("value", str(ctx.exception))
 
     def test_inaccessible_secret_raises(self):
+        """An inaccessible/not-found secret raises rather than silently falling back."""
         charm = _make_charm({})
         config = {
             "patch-sync.token": "plaintext-token",
@@ -106,6 +112,7 @@ class TestCredentialGroups(unittest.TestCase):
     """Tests for grouped `<group>.credentials-secret` resolution (CREDENTIAL_GROUPS)."""
 
     def test_plaintext_used_when_group_secret_not_set(self):
+        """With no group secret set, every field keeps its plaintext value."""
         charm = _make_charm({})
         config = {
             "contracts.user": "plain-user",
@@ -120,6 +127,7 @@ class TestCredentialGroups(unittest.TestCase):
         self.assertEqual(resolved["contracts.ca"], "plain-ca")
 
     def test_group_secret_overrides_all_provided_keys(self):
+        """A group secret providing every field overrides all of their plaintext counterparts."""
         charm = _make_charm(
             {"secret:group": {"user": "secret-user", "password": "secret-pass", "ca-cert": "secret-ca"}}
         )
@@ -154,6 +162,7 @@ class TestCredentialGroups(unittest.TestCase):
         self.assertEqual(resolved["contracts.ca"], "plain-ca")
 
     def test_inaccessible_group_secret_raises(self):
+        """An inaccessible/not-found group secret raises rather than silently falling back."""
         charm = _make_charm({})
         config = {
             "contracts.user": "plain-user",
@@ -185,17 +194,20 @@ class TestMapConfigToEnvVars(unittest.TestCase):
     """Tests for map_config_to_env_vars."""
 
     def test_maps_dotted_and_dashed_keys(self):
+        """Dotted and dashed config keys are both mapped to upper-snake-case LP_* env vars."""
         env = utils.map_config_to_env_vars({"contracts.user": "u", "patch-storage.type": "s3"}, is_leader=True)
 
         self.assertEqual(env["LP_CONTRACTS_USER"], "u")
         self.assertEqual(env["LP_PATCH_STORAGE_TYPE"], "s3")
 
     def test_sets_leader_flag(self):
+        """LP_SERVER_IS_LEADER reflects the `is_leader` argument."""
         env = utils.map_config_to_env_vars({}, is_leader=False)
 
         self.assertFalse(env["LP_SERVER_IS_LEADER"])
 
     def test_additional_env_merged(self):
+        """Extra keyword args are merged into the returned env var dict as-is."""
         env = utils.map_config_to_env_vars({}, is_leader=True, LP_EXTRA="value")
 
         self.assertEqual(env["LP_EXTRA"], "value")

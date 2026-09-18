@@ -192,9 +192,21 @@ class TestRedactFunction(unittest.TestCase):
         self.assertIn(_REDACTED, result)
         self.assertNotIn("secretvalue", result)
 
+    def test_lp_influx_token_redacted(self):
+        """LP_INFLUX_TOKEN env-var assignment has its value redacted.
+
+        The generic key=value pattern alone would miss this: the '_' before
+        'TOKEN' is a word character, so '\\btoken\\b' doesn't match there.
+        """
+        result = _redact("LP_INFLUX_TOKEN=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
     def test_lp_gcs_credentials_json_with_spaces_fully_redacted(self):
         """A value containing whitespace (e.g. JSON credentials) is fully redacted, not truncated."""
-        result = _redact('LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON={"type": "service_account", "project_id": "my-project"}')
+        result = _redact(
+            'LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON={"type": "service_account", "project_id": "my-project"}'
+        )
         self.assertIn(_REDACTED, result)
         self.assertNotIn("service_account", result)
         self.assertNotIn("project_id", result)
@@ -209,7 +221,7 @@ class TestRedactFunction(unittest.TestCase):
     def test_lp_multiline_credentials_fully_redacted(self):
         """A value spanning multiple lines (e.g. a PEM key embedded in pretty-printed JSON) is fully redacted."""
         msg = (
-            'LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON={\n'
+            "LP_PATCH_STORAGE_GCS_CREDENTIALS_JSON={\n"
             '  "private_key": "-----BEGIN PRIVATE KEY-----\n'
             "MIIEvQIBADANBgkqhkiG9w0BAQ\n"
             '-----END PRIVATE KEY-----"\n'

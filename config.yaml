@@ -69,7 +69,16 @@ options:
   auth.basic.users:
     description: |
       A comma separated list of "user:password" pairs used for authentication.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      auth.basic.users-secret to a Juju secret URI instead.
     type: string
+  auth.basic.users-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to auth.basic.users: takes priority over
+      it when both are set. Must be set to the URI of a Juju secret containing a "value"
+      key with the comma separated "user:password" pairs.
+    type: secret
   auth.sso.enabled:
     default: false
     description: |
@@ -164,10 +173,18 @@ options:
     description: URL to hit for the contracts service
     type: string
   contracts.user:
-    description: Username to authenticate with backend contracts service.
+    description: |
+      Username to authenticate with backend contracts service.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      the "user" key of contracts.credentials-secret to a Juju secret instead.
     type: string
   contracts.password:
-    description: Password to authenticate with backend contracts service.
+    description: |
+      Password to authenticate with backend contracts service.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      the "password" key of contracts.credentials-secret to a Juju secret instead.
     type: string
   contracts.ca:
     description: |
@@ -175,8 +192,19 @@ options:
       Use 'include-base64://' in a bundle to include a certificate. Otherwise,
       pass a base64-encoded certificate (base64 of "-----BEGIN" to "-----END")
       as a config option in a Juju CLI invocation.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      the "ca-cert" key of contracts.credentials-secret to a Juju secret instead.
     type: string
     default: ""
+  contracts.credentials-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to contracts.user/contracts.password/
+      contracts.ca: any key set here takes priority over its plain-text counterpart above.
+      Must be set to the URI of a Juju secret with (as applicable) "user", "password"
+      and "ca-cert" keys. "ca-cert" is a base64-encoded certificate of the CA that issued
+      the certificate of the contracts service (base64 of "-----BEGIN" to "-----END").
+    type: secret
 
   database.connection-pool-max:
     default: 10
@@ -249,8 +277,18 @@ options:
     type: string
   patch-storage.swift-api-key:
     default: ""
-    description: An authorisation API key for swift.
+    description: |
+      An authorisation API key for swift.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      patch-storage.swift-api-key-secret to a Juju secret URI instead.
     type: string
+  patch-storage.swift-api-key-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.swift-api-key: takes
+      priority over it when both are set. Must be set to the URI of a Juju secret
+      containing a "value" key with the API key.
+    type: secret
   patch-storage.swift-auth-url:
     default: ""
     description: The authorisation URL for swift.
@@ -280,7 +318,16 @@ options:
 
       If this is to be changed, it is expected that the database you wish to connect to is 
       created manually.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      patch-storage.postgres-connection-string-secret to a Juju secret URI instead.
     type: string
+  patch-storage.postgres-connection-string-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.postgres-connection-string:
+      takes priority over it when both are set. Must be set to the URI of a Juju secret
+      containing a "value" key with the connection string URI.
+    type: secret
   patch-storage.s3-bucket:
     default: ""
     description: The S3 bucket to store patches within.
@@ -305,11 +352,25 @@ options:
       this workload runs in a pod, not a VM, so ambient credentials (e.g. an EC2 instance role)
       are not available unless IAM Roles for Service Accounts (IRSA) has been configured
       separately for the workload's service account; otherwise, these keys must be set.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting the
+      "access-key" key of patch-storage.s3-credentials-secret to a Juju secret instead.
     type: string
   patch-storage.s3-secret-key:
     default: ""
-    description: AWS programmatic API secret key, used together with patch-storage.s3-access-key.
+    description: |
+      AWS programmatic API secret key, used together with patch-storage.s3-access-key.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting the
+      "secret-key" key of patch-storage.s3-credentials-secret to a Juju secret instead.
     type: string
+  patch-storage.s3-credentials-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.s3-access-key/
+      patch-storage.s3-secret-key: any key set here takes priority over its plain-text
+      counterpart above. Must be set to the URI of a Juju secret with "access-key" and
+      "secret-key" keys.
+    type: secret
   patch-storage.s3-use-path-style:
     default: false
     description: |
@@ -341,7 +402,16 @@ options:
     description: |
       Google Cloud service account credentials, as a JSON string. When omitted (along with
       patch-storage.gcs-credentials-file), Application Default Credentials are used instead.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      patch-storage.gcs-credentials-json-secret to a Juju secret URI instead.
     type: string
+  patch-storage.gcs-credentials-json-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.gcs-credentials-json: takes
+      priority over it when both are set. Must be set to the URI of a Juju secret containing
+      a "value" key with the JSON credentials.
+    type: secret
   patch-storage.gcs-impersonate-service-account:
     default: ""
     description: |
@@ -363,12 +433,18 @@ options:
     description: |
       The Azure Storage account key, used together with patch-storage.azure-account-name for
       shared key authentication.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting the
+      "account-key" key of patch-storage.azure-credentials-secret to a Juju secret instead.
     type: string
   patch-storage.azure-connection-string:
     default: ""
     description: |
       An Azure Storage connection string. When set, this is used instead of
       patch-storage.azure-account-name/patch-storage.azure-account-key for authentication.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting the
+      "connection-string" key of patch-storage.azure-credentials-secret to a Juju secret instead.
     type: string
   patch-storage.azure-tenant-id:
     default: ""
@@ -382,8 +458,20 @@ options:
     type: string
   patch-storage.azure-client-secret:
     default: ""
-    description: The Entra ID (Azure AD) service principal's client secret.
+    description: |
+      The Entra ID (Azure AD) service principal's client secret.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting the
+      "client-secret" key of patch-storage.azure-credentials-secret to a Juju secret instead.
     type: string
+  patch-storage.azure-credentials-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.azure-account-key/
+      patch-storage.azure-connection-string/patch-storage.azure-client-secret: any key set
+      here takes priority over its plain-text counterpart above. Must be set to the URI of
+      a Juju secret with (as applicable) "account-key", "connection-string" and
+      "client-secret" keys.
+    type: secret
   patch-storage.azure-managed-identity-client-id:
     default: ""
     description: |
@@ -409,7 +497,16 @@ options:
     default: ""
     description: |
       IAM API key. Must be set together with patch-storage.ibm-service-instance-id.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      patch-storage.ibm-api-key-secret to a Juju secret URI instead.
     type: string
+  patch-storage.ibm-api-key-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.ibm-api-key: takes
+      priority over it when both are set. Must be set to the URI of a Juju secret
+      containing a "value" key with the API key.
+    type: secret
   patch-storage.ibm-service-instance-id:
     default: ""
     description: IBM Cloud service instance ID, used together with patch-storage.ibm-api-key.
@@ -495,9 +592,19 @@ options:
     description: Livepatch server to download patch snapshots from.
     type: string
   patch-sync.token:
-    description: Token generated from the admin-tool to authenticate machine to machine.
+    description: |
+      Token generated from the admin-tool to authenticate machine to machine.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      patch-sync.token-secret to a Juju secret URI instead.
     type: string
     default: ""
+  patch-sync.token-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-sync.token: takes priority over
+      it when both are set. Must be set to the URI of a Juju secret containing a "value"
+      key with the token.
+    type: secret
   patch-sync.minimum-kernel-version:
     description: >-
       A minimum kernel version of format "0.0.0" denoting the lowest 
@@ -661,8 +768,18 @@ options:
     description: URL of the InfluxDB instance to connect to.
     type: string
   influx.token:
-    description: Authentication token for InfluxDB.
+    description: |
+      Authentication token for InfluxDB.
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      influx.token-secret to a Juju secret URI instead.
     type: string
+  influx.token-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to influx.token: takes priority over it
+      when both are set. Must be set to the URI of a Juju secret containing a "value"
+      key with the token.
+    type: secret
   influx.bucket:
     description: InfluxDB bucket to write general metrics data to.
     type: string

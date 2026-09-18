@@ -565,6 +565,73 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.charm._state.resource_token, "some-resource-token")
         self.assertEqual(output.results, {"result": "resource token set"})
 
+    def test_get_resource_token_action__success_with_contract_token_secret(self):
+        """Test `get-resource-token` action prefers `contract-token-secret` over `contract-token`."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        del self.harness.charm._state.resource_token
+
+        secret_id = self.harness.add_user_secret({"value": "secret-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        seen_authorization_headers = []
+
+        def make_request_side_effect(method: str, url: str, *args, **kwargs):
+            if method == "POST":
+                seen_authorization_headers.append(kwargs["headers"]["Authorization"])
+                return {"machineToken": "some-machine-token"}
+            if method == "GET":
+                return {"resourceToken": "some-resource-token"}
+            raise AssertionError("unexpected request")
+
+        with patch("utils.make_request", Mock(side_effect=make_request_side_effect)):
+            output = self.harness.run_action(
+                "get-resource-token", {"contract-token": "ignored", "contract-token-secret": secret_id}
+            )
+
+        # Assert the *secret's* token was used, not the plaintext `contract-token` param.
+        self.assertEqual(seen_authorization_headers, ["Bearer secret-token"])
+        self.assertEqual(self.harness.charm._state.resource_token, "some-resource-token")
+        self.assertEqual(output.results, {"result": "resource token set"})
+
+    def test_get_resource_token_action__failure__contract_token_secret_missing_value_key(self):
+        """Test `get-resource-token` action fails when the secret has no `value` key."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        del self.harness.charm._state.resource_token
+
+        secret_id = self.harness.add_user_secret({"other-key": "secret-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        output = self.harness.run_action("get-resource-token", {"contract-token-secret": secret_id})
+
+        self.assertEqual(
+            output.results,
+            {"error": "cannot fetch the resource token: the secret must have a " "`value` key with the contract token"},
+        )
+
+    def test_get_resource_token_action__failure__contract_token_secret_inaccessible(self):
+        """Test `get-resource-token` action fails when the secret cannot be accessed."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+        del self.harness.charm._state.resource_token
+
+        output = self.harness.run_action("get-resource-token", {"contract-token-secret": "secret:unknown"})
+
+        self.assertEqual(
+            output.results,
+            {
+                "error": "cannot fetch the resource token: could not access the `contract-token-secret` "
+                f"secret. Run `juju grant-secret <secret> {APP_NAME}` and try again."
+            },
+        )
+
     def test_emit_updated_config__failure_bad_format(self):
         """Test the scenario where `emit-updated-config` action fails due to bad yaml formatting."""
         self.harness.set_leader(True)
@@ -656,7 +723,13 @@ settings:
 
         output = self.harness.run_action("get-resource-token", {"contract-token": ""})
 
-        self.assertEqual(output.results, {"error": "cannot fetch the resource token: no contract token provided"})
+        self.assertEqual(
+            output.results,
+            {
+                "error": "cannot fetch the resource token: no contract token provided "
+                "(use `contract-token-secret` (preferred) or `contract-token`)"
+            },
+        )
 
     def test_get_resource_token_action__failure__sync_token_already_set(self):
         """Test the scenario where `get-resource-token` action fails because sync token is already set."""
@@ -814,6 +887,140 @@ settings:
         root = self.harness.get_filesystem_root("livepatch")
         cert = (root / "usr/local/share/ca-certificates/trusted-contracts.ca.crt").read_text()
         self.assertEqual(cert, "New Test CA Cert\n")
+
+    def test_config_credentials_secret_resolved_into_env_vars(self):
+        """A `contracts.credentials-secret` config secret overrides the plaintext `contracts.password`."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config(
+            {
+                "contracts.user": "plaintext-user",
+                "contracts.password": "plaintext-pass",
+                "contracts.credentials-secret": secret_id,
+            }
+        )
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_CONTRACTS_USER"], "secret-user")
+        self.assertEqual(environment["LP_CONTRACTS_PASSWORD"], "secret-pass")
+
+    def test_config_secret_missing_value_key_blocks_unit(self):
+        """A config secret that is set but lacks the expected key blocks the unit."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"not-value": "oops"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"patch-sync.token-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
+        self.assertIn("patch-sync.token-secret", self.harness.charm.unit.status.message)
+
+    def test_secret_changed_reconfigures_workload(self):
+        """Rotating a config-referenced secret's content updates the workload env on secret-changed."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"value": "old-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"patch-sync.token-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_PATCH_SYNC_TOKEN"], "old-token")
+
+        # Rotating the secret's content fires secret-changed, which the charm observes.
+        self.harness.set_secret_content(secret_id, {"value": "new-token"})
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_PATCH_SYNC_TOKEN"], "new-token")
+
+    def test_group_secret_field_drop_clears_stale_env_var(self):
+        """Rotating a group secret to stop providing a field clears its stale env var, not just the plaintext."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"contracts.credentials-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_CONTRACTS_PASSWORD"], "secret-pass")
+
+        # New revision drops `password`; there is no plaintext contracts.password fallback set.
+        self.harness.set_secret_content(secret_id, {"user": "secret-user"})
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_CONTRACTS_PASSWORD"], "")
+
+    def test_invalid_secret_stops_service_fail_closed(self):
+        """A previously-working secret becoming unresolvable stops the service rather than keeping it running."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"value": "old-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"patch-sync.token-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        container = self.harness.model.unit.get_container("livepatch")
+        self.assertTrue(container.get_service(LIVEPATCH_SERVICE_NAME).is_running())
+
+        # Rotate to a revision missing the expected `value` key.
+        self.harness.set_secret_content(secret_id, {"not-value": "oops"})
+
+        self.assertFalse(container.get_service(LIVEPATCH_SERVICE_NAME).is_running())
+        self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
+
+    def test_ca_cert_removed_when_dropped_from_secret(self):
+        """Rotating a group secret to stop providing `ca` removes the previously trusted cert."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        self.harness.handle_exec("livepatch", [], result=0)
+        secret_id = self.harness.add_user_secret({"ca-cert": TEST_CA_CERT})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"contracts.credentials-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        root = self.harness.get_filesystem_root("livepatch")
+        ca_path = root / "usr/local/share/ca-certificates/trusted-contracts.ca.crt"
+        self.assertTrue(ca_path.exists())
+
+        # New revision drops `ca-cert` (a Juju secret can't have empty content, so it
+        # still carries an unrelated field); there is no plaintext contracts.ca fallback set.
+        self.harness.set_secret_content(secret_id, {"user": "someone"})
+
+        self.assertFalse(ca_path.exists())
 
     def test_logrotate_config_pushed(self):
         """Assure that logrotate config is pushed."""

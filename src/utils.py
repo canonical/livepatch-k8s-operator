@@ -11,21 +11,148 @@ import tempfile
 import typing as t
 
 import requests
+from ops.model import ModelError
 
 DEFAULT_CONTRACTS_URL = "https://contracts.canonical.com"
 RESOURCE_NAME = "livepatch-onprem"
 
+# The key under which a `type: secret` config option's value is expected to be
+# stored in the secret's content, for options that hold a single, standalone
+# value (as opposed to a credentials group secret's several named keys).
+SECRET_VALUE_KEY = "value"  # nosec B105
 
-def map_config_to_env_vars(charm, **additional_env):
+# Suffix for a Juju secret holding the same value as a single sensitive config
+# option, under the SECRET_VALUE_KEY key (e.g. "patch-sync.token-secret").
+SECRET_SUFFIX = "-secret"
+
+
+class CharmConfigInvalidError(Exception):
+    """Raised when a secret-backed config option is set but cannot be resolved."""
+
+
+# Standalone config options with a preferred, Juju-secret-backed "<key>-secret"
+# sibling: the secret (if set) takes priority over the deprecated plain-text
+# option. Keys that belong to a CREDENTIAL_GROUPS entry below are not listed
+# here; use the group instead.
+SECRET_BACKED_CONFIG_KEYS = (
+    "auth.basic.users",
+    "patch-storage.swift-api-key",
+    "patch-storage.gcs-credentials-json",
+    "patch-storage.ibm-api-key",
+    "patch-storage.postgres-connection-string",
+    "patch-sync.token",
+    "influx.token",
+)
+
+# Config options that bundle several related, deprecated plain-text options
+# into a single preferred "<group>.credentials-secret" Juju secret, keyed by
+# short field names, so operators only have to manage one secret per group.
+# Any key set in the secret takes priority over its plain-text counterpart;
+# keys the secret doesn't provide fall back to their plain-text option.
+CREDENTIAL_GROUPS = {
+    "contracts.credentials-secret": {
+        "user": "contracts.user",
+        "password": "contracts.password",
+        "ca-cert": "contracts.ca",
+    },
+    "patch-storage.s3-credentials-secret": {
+        "access-key": "patch-storage.s3-access-key",
+        "secret-key": "patch-storage.s3-secret-key",
+    },
+    "patch-storage.azure-credentials-secret": {
+        "account-key": "patch-storage.azure-account-key",
+        "connection-string": "patch-storage.azure-connection-string",
+        "client-secret": "patch-storage.azure-client-secret",
+    },
+}
+
+# LP_* env var names for every config key that has a secret-backed alternative
+# (standalone or grouped). A secret revision may legitimately drop a value
+# (e.g. a group secret that stops providing a field, with no plain-text
+# fallback set), so these keys must always be explicitly present in the Pebble
+# layer, even as "", or Pebble's layer merge would leave the stale value in
+# place. See `explicit_keys` in `charm.py:get_env_vars`.
+SECRET_BACKED_ENV_VARS = {
+    "LP_" + key.replace("-", "_").replace(".", "_").upper()
+    for key in (
+        *SECRET_BACKED_CONFIG_KEYS,
+        *(target_key for field_map in CREDENTIAL_GROUPS.values() for target_key in field_map.values()),
+    )
+}
+
+
+def _get_secret_content(charm, secret_id: str, key: str) -> dict:
+    """Fetch the content of the Juju secret with the given ID.
+
+    Raises:
+        CharmConfigInvalidError: if the secret is inaccessible (e.g. not granted).
     """
-    Map the config values provided in config.yaml into environment variables.
+    try:
+        return charm.model.get_secret(id=secret_id).get_content(refresh=True)
+    except ModelError as e:
+        raise CharmConfigInvalidError(
+            f"could not access the secret configured for `{key}`; run "
+            f"`juju grant-secret <secret> {charm.app.name}` and try again."
+        ) from e
 
+
+def resolve_secret_config(charm, config: dict) -> dict:
+    """
+    Resolve sensitive config values from their Juju secret equivalents, if set.
+
+    For each key in SECRET_BACKED_CONFIG_KEYS, "<key>-secret" (a secret URI holding
+    the value under SECRET_VALUE_KEY) takes precedence over the plaintext key when
+    set. For each group in CREDENTIAL_GROUPS, any key set in the grouped secret
+    takes precedence over its plaintext counterpart; keys it doesn't provide fall
+    back to their plaintext option.
+
+    The helper-only "-secret" options are stripped from the returned dict, which
+    otherwise mirrors `config`.
+
+    Raises:
+        CharmConfigInvalidError: if a secret is set but inaccessible, or a
+            standalone secret doesn't provide a SECRET_VALUE_KEY key.
+    """
+    resolved = dict(config)
+
+    for key in SECRET_BACKED_CONFIG_KEYS:
+        secret_key = f"{key}{SECRET_SUFFIX}"
+        secret_id = resolved.pop(secret_key, None)
+        if not secret_id:
+            continue
+        content = _get_secret_content(charm, secret_id, secret_key)
+        value = content.get(SECRET_VALUE_KEY)
+        if value is None:
+            raise CharmConfigInvalidError(
+                f"the secret configured for `{secret_key}` must have a `{SECRET_VALUE_KEY}` key"
+            )
+        resolved[key] = value
+
+    for group_key, field_map in CREDENTIAL_GROUPS.items():
+        secret_id = resolved.pop(group_key, None)
+        if not secret_id:
+            continue
+        content = _get_secret_content(charm, secret_id, group_key)
+        for content_key, target_key in field_map.items():
+            value = content.get(content_key)
+            if value is not None:
+                resolved[target_key] = value
+
+    return resolved
+
+
+def map_config_to_env_vars(config: dict, is_leader: bool, **additional_env):
+    """
+    Map the resolved config values into environment variables.
+
+    `config` should already have sensitive values resolved from their
+    "-secret"/"-credentials" Juju secret equivalents (see `resolve_secret_config`).
     After that, the vars can be passed directly to the pebble layer.
     Variables must match the form LP_<Key1>_<key2>_<key3>...
     """
-    env_mapped_config = {"LP_" + k.replace("-", "_").replace(".", "_").upper(): v for k, v in charm.config.items()}
+    env_mapped_config = {"LP_" + k.replace("-", "_").replace(".", "_").upper(): v for k, v in config.items()}
 
-    env_mapped_config["LP_SERVER_IS_LEADER"] = charm.unit.is_leader()
+    env_mapped_config["LP_SERVER_IS_LEADER"] = is_leader
 
     return {**env_mapped_config, **additional_env}
 

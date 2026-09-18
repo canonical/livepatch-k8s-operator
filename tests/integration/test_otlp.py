@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 OTEL_COLLECTOR_APP = "opentelemetry-collector-k8s"
 OTEL_COLLECTOR_CHANNEL = "dev/edge"
-OTEL_COLLECTOR_REVISION = 251
 LIVEPATCH_SEND_OTLP_ENDPOINT = "send-otlp"
 COLLECTOR_RECEIVE_OTLP_ENDPOINT = "receive-otlp"
 
@@ -68,13 +67,13 @@ async def test_deploy_and_relate_otel_collector(ops_test: OpsTest):
         OTEL_COLLECTOR_APP,
         application_name=OTEL_COLLECTOR_APP,
         channel=OTEL_COLLECTOR_CHANNEL,
-        revision=OTEL_COLLECTOR_REVISION,
         trust=True,
     )
 
     async with ops_test.fast_forward():
         await ops_test.model.wait_for_idle(
             apps=[OTEL_COLLECTOR_APP],
+            status=ACTIVE_STATUS,
             raise_on_blocked=False,
             timeout=600,
         )

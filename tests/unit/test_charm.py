@@ -998,6 +998,32 @@ settings:
         self.assertFalse(container.get_service(LIVEPATCH_SERVICE_NAME).is_running())
         self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
 
+    def test_update_status_fails_closed_when_secret_revoked(self):
+        """update-status catches a config-referenced secret being revoked and fails closed.
+
+        Revoking access doesn't fire secret-changed (that only fires when the owner
+        adds a new revision), so update-status is what bounds the staleness window.
+        """
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"value": "old-token"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config({"patch-sync.token-secret": secret_id})
+        self.harness.charm.on.config_changed.emit()
+
+        container = self.harness.model.unit.get_container("livepatch")
+        self.assertTrue(container.get_service(LIVEPATCH_SERVICE_NAME).is_running())
+
+        self.harness.revoke_secret(secret_id, APP_NAME)
+        self.harness.charm.on.update_status.emit()
+
+        self.assertFalse(container.get_service(LIVEPATCH_SERVICE_NAME).is_running())
+        self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
+
     def test_ca_cert_removed_when_dropped_from_secret(self):
         """Rotating a group secret to stop providing `ca` removes the previously trusted cert."""
         self.harness.set_leader(True)

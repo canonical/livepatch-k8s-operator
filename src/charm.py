@@ -94,8 +94,8 @@ class LivepatchCharm(CharmBase):
         self.framework.observe(self.on.livepatch_pebble_ready, self.on_pebble_ready)
         self.framework.observe(self.on.start, self.on_start)
         self.framework.observe(self.on.stop, self.on_stop)
-        # A secret referenced by a `type: secret` config option may rotate independently
-        # of any config change, so the workload must be reconfigured here too.
+        # A secret referenced by config (as a plain string holding its URI) may rotate
+        # independently of any config change, so the workload must be reconfigured here too.
         self.framework.observe(self.on.secret_changed, self.on_secret_changed)
 
         self.framework.observe(self.on.restart_action, self.restart_action)
@@ -274,7 +274,21 @@ class LivepatchCharm(CharmBase):
         self._update_workload_container_config(event)
 
     def on_update_status(self, event):
-        """Handle update-status hook: verify workload health and refresh unit status."""
+        """Handle update-status hook: refresh workload/unit status.
+
+        Also periodically re-validates that every secret referenced by config is
+        still resolvable, failing closed if one was revoked, deleted, or otherwise
+        made invalid since the last reconciliation. Juju only notifies a secret's
+        *owner* of expiry/rotation/removal (`secret-expired`/`secret-rotate`/
+        `secret-remove`) - never an observer like this charm - so update-status is
+        what bounds how long a now-invalid secret can go undetected.
+        """
+        try:
+            _ = self.resolved_config
+        except utils.CharmConfigInvalidError as e:
+            self._fail_closed(str(e))
+            return
+
         workload = self.unit.get_container(WORKLOAD_CONTAINER)
         self._ready(workload)
 
@@ -603,15 +617,21 @@ class LivepatchCharm(CharmBase):
             layer_label = "livepatch"
             self._update_trusted_ca_certs(workload_container, resolved_config)
         except utils.CharmConfigInvalidError as e:
-            LOGGER.error(str(e))
-            # Fail closed: a secret the workload depends on just became unresolvable
-            # (e.g. revoked/rotated to a bad revision), so stop serving with whatever
-            # credential was last successfully applied rather than leaving it running.
-            self._stop_service()
-            self.unit.status = BlockedStatus(str(e))
+            self._fail_closed(str(e))
             return
         workload_container.add_layer(layer_label, update_config_environment_layer, combine=True)
         self._start_or_restart_service(workload_container)
+
+    def _fail_closed(self, error_msg: str) -> None:
+        """Stop the service and block the unit in response to an unresolvable secret.
+
+        A secret the workload depends on just became invalid (revoked, deleted, or
+        otherwise inaccessible), so stop serving with whatever credential was last
+        successfully applied rather than leaving it running indefinitely.
+        """
+        LOGGER.error(error_msg)
+        self._stop_service()
+        self.unit.status = BlockedStatus(error_msg)
 
     def _start_or_restart_service(self, workload_container):
         """Start the Livepatch service if stopped, or restart it if already running."""

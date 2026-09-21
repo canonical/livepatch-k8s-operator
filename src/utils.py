@@ -23,7 +23,7 @@ SECRET_VALUE_KEY = "value"  # nosec B105
 
 # Suffix for a Juju secret holding the same value as a single sensitive config
 # option, under the SECRET_VALUE_KEY key (e.g. "patch-sync.token-secret").
-SECRET_SUFFIX = "-secret"
+SECRET_SUFFIX = "-secret"  # nosec B105
 
 
 class CharmConfigInvalidError(Exception):
@@ -52,7 +52,7 @@ SECRET_BACKED_CONFIG_KEYS = (
 CREDENTIAL_GROUPS = {
     "contracts.credentials-secret": {
         "user": "contracts.user",
-        "password": "contracts.password",
+        "password": "contracts.password",  # nosec B105
         "ca-cert": "contracts.ca",
     },
     "patch-storage.s3-credentials-secret": {

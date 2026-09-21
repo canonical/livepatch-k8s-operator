@@ -129,7 +129,7 @@ class TestCredentialGroups(unittest.TestCase):
     def test_group_secret_overrides_all_provided_keys(self):
         """A group secret providing every field overrides all of their plaintext counterparts."""
         charm = _make_charm(
-            {"secret:group": {"user": "secret-user", "password": "secret-pass", "ca-cert": "secret-ca"}}
+            {"secret:group": {"user": "secret-user", "password": "secret-pass", "ca-cert": "secret-ca"}}  # nosec B105
         )
         config = {
             "contracts.user": "plain-user",

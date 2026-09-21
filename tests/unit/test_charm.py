@@ -895,7 +895,7 @@ settings:
 
         self.start_container()
 
-        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})
+        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})  # nosec B105
         self.harness.grant_secret(secret_id, APP_NAME)
 
         self.harness.update_config(
@@ -959,7 +959,7 @@ settings:
 
         self.start_container()
 
-        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})
+        secret_id = self.harness.add_user_secret({"user": "secret-user", "password": "secret-pass"})  # nosec B105
         self.harness.grant_secret(secret_id, APP_NAME)
 
         self.harness.update_config({"contracts.credentials-secret": secret_id})

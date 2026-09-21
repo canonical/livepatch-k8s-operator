@@ -77,6 +77,7 @@ _SENSITIVE_ENV_VAR_PATTERN = re.compile(
     r"|LP_AUTH_SSO_PUBLIC_KEY"
     r"|LP_PATCH_STORAGE_POSTGRES_CONNECTION_STRING"
     r"|LP_DATABASE_CONNECTION_STRING"
+    r"|LP_INFLUX_TOKEN"
     r")"
     r"(?P<sep>=)"
     # Non-greedy, spanning newlines (DOTALL): stop only before a run of trailing

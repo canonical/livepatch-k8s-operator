@@ -177,6 +177,10 @@ options:
       as a config option in a Juju CLI invocation.
     type: string
     default: ""
+  contracts.timeout:
+    default: "5s"
+    description: Timeout for requests to the contracts service.
+    type: string
 
   database.connection-pool-max:
     default: 10

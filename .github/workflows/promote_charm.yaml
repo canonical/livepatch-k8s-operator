@@ -3,20 +3,27 @@ name: Promote Charm
 on:
   workflow_dispatch:
     inputs:
+        track:
+            type: choice
+            description: 'Track'
+            options:
+            - legacy
+            - latest
+            default: legacy
         origin-channel:
             type: choice
             description: 'Origin Channel'
             options:
-            - legacy/edge
-            - legacy/beta
-            - legacy/candidate
+            - edge
+            - beta
+            - candidate
         destination-channel:
             type: choice
             description: 'Destination Channel'
             options:
-            - legacy/beta
-            - legacy/candidate
-            - legacy/stable
+            - beta
+            - candidate
+            - stable
         base-channel:
             type: choice
             description: 'Base Channel to promote'
@@ -33,7 +40,7 @@ jobs:
   get-approval:
     name: Get Approval
     runs-on: ubuntu-latest
-    environment: ${{ inputs.destination-channel }}
+    environment: ${{ inputs.track }}/${{ inputs.destination-channel }}
     outputs:
       approved: ${{ steps.set-output.outputs.approved }}
     steps:
@@ -49,8 +56,8 @@ jobs:
       contents: write
     uses: canonical/operator-workflows/.github/workflows/promote_charm.yaml@main
     with:
-      origin-channel: ${{ inputs.origin-channel }}
-      destination-channel: ${{ inputs.destination-channel }}
+      origin-channel: ${{ inputs.track }}/${{ inputs.origin-channel }}
+      destination-channel: ${{ inputs.track }}/${{ inputs.destination-channel }}
       base-channel: ${{ inputs.base-channel }}
       base-name: ubuntu
       base-architecture: amd64

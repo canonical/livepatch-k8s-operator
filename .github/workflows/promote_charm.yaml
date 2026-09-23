@@ -7,16 +7,16 @@ on:
             type: choice
             description: 'Origin Channel'
             options:
-            - latest/edge
-            - latest/beta
-            - latest/candidate
+            - legacy/edge
+            - legacy/beta
+            - legacy/candidate
         destination-channel:
             type: choice
             description: 'Destination Channel'
             options:
-            - latest/beta
-            - latest/candidate
-            - latest/stable
+            - legacy/beta
+            - legacy/candidate
+            - legacy/stable
         base-channel:
             type: choice
             description: 'Base Channel to promote'

@@ -204,6 +204,7 @@ options:
       the "ca-cert" key of contracts.credentials-secret to a Juju secret instead.
     type: string
     default: ""
+<<<<<<< HEAD
   contracts.credentials-secret:
     description: |
       Preferred, Juju-secret-backed alternative to contracts.user/contracts.password/
@@ -211,6 +212,11 @@ options:
       Must be set to the URI of a Juju secret with (as applicable) "user", "password"
       and "ca-cert" keys. "ca-cert" is a base64-encoded certificate of the CA that issued
       the certificate of the contracts service (base64 of "-----BEGIN" to "-----END").
+=======
+  contracts.timeout:
+    default: "5s"
+    description: Timeout for requests to the contracts service.
+>>>>>>> main
     type: string
 
   database.connection-pool-max:

@@ -125,6 +125,7 @@ class TestCharm(unittest.TestCase):
             "LP_PATCH_STORAGE_FILESYSTEM_PATH": "/srv/",
             "LP_PATCH_CACHE_ENABLED": True,
             "LP_DATABASE_CONNECTION_STRING": "postgresql://123",
+            "LP_CONTRACTS_TIMEOUT": "5s",
             "LP_CONTRACTS_URL": "http://contracts.host.name",
         }
         environment = plan.to_dict()["services"]["livepatch"]["environment"]

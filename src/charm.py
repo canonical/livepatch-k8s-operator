@@ -281,12 +281,21 @@ class LivepatchCharm(CharmBase):
         made invalid since the last reconciliation. Juju only notifies a secret's
         *owner* of expiry/rotation/removal (`secret-expired`/`secret-rotate`/
         `secret-remove`) - never an observer like this charm - so update-status is
-        what bounds how long a now-invalid secret can go undetected.
+        what bounds how long a now-invalid secret can go undetected. If the unit
+        was left blocked by a prior failure, this also drives recovery once the
+        underlying issue (e.g. a revoked secret) is resolved.
         """
         try:
             _ = self.resolved_config
         except utils.CharmConfigInvalidError as e:
             self._fail_closed(str(e))
+            return
+
+        if isinstance(self.unit.status, BlockedStatus):
+            # Recovering from a prior failure (e.g. a revoked secret was just
+            # re-granted): reconfigure and restart the workload, since
+            # _fail_closed() stopped it and _ready() alone never starts it back up.
+            self._update_workload_container_config(event)
             return
 
         workload = self.unit.get_container(WORKLOAD_CONTAINER)

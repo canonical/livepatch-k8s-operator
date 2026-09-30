@@ -13,12 +13,24 @@ restart:
   description: Restart livepatch service.
 
 get-resource-token:
-  description: Get resource token from ua-contracts based on the contract token.
+  description: |
+    Get resource token from ua-contracts based on the contract token.
+
+    Provide `contract-token-secret` (preferred): the URI of a Juju secret containing
+    a "value" key with the contract token, e.g.:
+      juju add-secret livepatch-contract-token value=<contract-token>
+      juju grant-secret livepatch-contract-token canonical-livepatch-server-k8s
+      juju run canonical-livepatch-server-k8s/leader get-resource-token contract-token-secret=<secret-uri>
+
+    Alternatively (deprecated: stored in plaintext in Juju's action history, visible
+    via `juju show-task`/`juju show-operation`), provide `contract-token` directly.
   params:
     contract-token:
       type: string
       default: ""
-  required: ["contract-token"]
+    contract-token-secret:
+      type: string
+      default: ""
 
 emit-updated-config:
   description: Generate new yaml config based on old reactive charm config.

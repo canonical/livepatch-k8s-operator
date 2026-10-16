@@ -1,0 +1,28 @@
+name: Publish Charm (legacy track)
+
+on:
+  workflow_dispatch:
+
+run-name: Release charm to legacy track by @${{ github.actor }}
+
+jobs:
+  upload-livepatch-operator-k8s:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Log in to the Container registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload charm to charmhub
+        uses: canonical/charming-actions/upload-charm@main
+        with:
+          credentials: "${{ secrets.CHARMHUB_TOKEN }}"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          channel: "legacy/edge"

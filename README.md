@@ -131,7 +131,7 @@ juju integrate canonical-livepatch-server-k8s:metrics-db postgresql-k8s:database
 
 ## OCI Image
 
-This charm uses an OCI image, built as a ROCK and published on GitHub Container Registry (GHCR) as `ghcr.io/canonical/livepatch-server`.
+This charm uses an OCI image, built as a ROCK and published on GitHub Container Registry (GHCR) as `ghcr.io/canonical/livepatch-server-legacy`.
 
 ## Documentation
 

@@ -913,6 +913,28 @@ settings:
         self.assertEqual(environment["LP_CONTRACTS_USER"], "secret-user")
         self.assertEqual(environment["LP_CONTRACTS_PASSWORD"], "secret-pass")
 
+    def test_swift_temp_url_key_secret_overrides_plaintext(self):
+        """A `patch-storage.swift-temp-url-key-secret` config secret overrides the plaintext value."""
+        self.harness.set_leader(True)
+        self.harness.enable_hooks()
+
+        self.start_container()
+
+        secret_id = self.harness.add_user_secret({"value": "secret-temp-url-key"})
+        self.harness.grant_secret(secret_id, APP_NAME)
+
+        self.harness.update_config(
+            {
+                "patch-storage.swift-temp-url-key": "plaintext-temp-url-key",
+                "patch-storage.swift-temp-url-key-secret": secret_id,
+            }
+        )
+        self.harness.charm.on.config_changed.emit()
+
+        plan = self.harness.get_container_pebble_plan("livepatch")
+        environment = plan.to_dict()["services"]["livepatch"]["environment"]
+        self.assertEqual(environment["LP_PATCH_STORAGE_SWIFT_TEMP_URL_KEY"], "secret-temp-url-key")
+
     def test_config_secret_missing_value_key_blocks_unit(self):
         """A config secret that is set but lacks the expected key blocks the unit."""
         self.harness.set_leader(True)

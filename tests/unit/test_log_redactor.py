@@ -150,6 +150,12 @@ class TestRedactFunction(unittest.TestCase):
         self.assertIn(_REDACTED, result)
         self.assertNotIn("secretvalue", result)
 
+    def test_lp_swift_temp_url_key_redacted(self):
+        """LP_PATCH_STORAGE_SWIFT_TEMP_URL_KEY env-var assignment has its value redacted."""
+        result = _redact("LP_PATCH_STORAGE_SWIFT_TEMP_URL_KEY=secretvalue")
+        self.assertIn(_REDACTED, result)
+        self.assertNotIn("secretvalue", result)
+
     def test_lp_azure_account_key_redacted(self):
         """LP_PATCH_STORAGE_AZURE_ACCOUNT_KEY env-var assignment has its value redacted."""
         result = _redact("LP_PATCH_STORAGE_AZURE_ACCOUNT_KEY=secretvalue")

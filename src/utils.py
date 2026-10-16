@@ -37,6 +37,7 @@ class CharmConfigInvalidError(Exception):
 SECRET_BACKED_CONFIG_KEYS = (
     "auth.basic.users",
     "patch-storage.swift-api-key",
+    "patch-storage.swift-temp-url-key",
     "patch-storage.gcs-credentials-json",
     "patch-storage.ibm-api-key",
     "patch-storage.postgres-connection-string",

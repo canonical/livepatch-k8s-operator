@@ -395,6 +395,15 @@ options:
       An optional IAM role ARN to assume via STS. When set, the resolved AWS credentials
       are used to assume this role via STS instead of being used directly.
     type: string
+  patch-storage.s3-assume-role-duration:
+    default: "15m"
+    description: |
+      How long an assumed role's STS session stays valid before it must be refreshed;
+      only applies when patch-storage.s3-assume-role-arn is set. Defaults to "15m" when
+      unset, which is AWS's minimum for AssumeRole (900 seconds). AWS STS rejects
+      requests below this minimum or exceeding the target IAM role's MaxSessionDuration
+      (1 hour by default, configurable up to 12 hours).
+    type: string
   patch-storage.gcs-bucket:
     default: ""
     description: The Google Cloud Storage bucket to store patches within.
@@ -530,6 +539,15 @@ options:
       is not available unless a Trusted Profile bound to the underlying compute resource
       has been configured separately; this option then selects which profile to assume.
     type: string
+  patch-storage.ibm-upload-trusted-profile-id:
+    default: ""
+    description: |
+      A dedicated IAM Trusted Profile ID to assume when issuing temporary upload
+      credentials for `livepatch-admin patch upload` (optional). Must be pre-provisioned
+      with write access to the target bucket and Assume access granted to the server
+      identity. Admin-tool-facilitated patch upload is not yet supported for IBM Cloud
+      Object Storage.
+    type: string
   patch-storage.oracle-bucket:
     default: ""
     description: The Oracle Cloud Infrastructure Object Storage bucket to store patches within.
@@ -552,6 +570,33 @@ options:
   patch-storage.oracle-profile:
     default: ""
     description: The profile name to use from the OCI config file.
+    type: string
+  patch-storage.swift-temp-url-key:
+    default: ""
+    description: |
+      OpenStack Swift account or container TempURL key, used to sign scoped, time-limited
+      upload credentials for `livepatch-admin patch upload`. Because Swift never returns a
+      previously set key, it must be provisioned out-of-band and configured here with the
+      identical secret key (optional).
+
+      Deprecated: this option is stored in plain text in Juju's config; prefer setting
+      patch-storage.swift-temp-url-key-secret to a Juju secret URI instead.
+    type: string
+  patch-storage.swift-temp-url-key-secret:
+    description: |
+      Preferred, Juju-secret-backed alternative to patch-storage.swift-temp-url-key: takes
+      priority over it when both are set. Must be set to the URI of a Juju secret
+      containing a "value" key with the TempURL key.
+    type: string
+  patch-storage.upload-credential-ttl:
+    default: "15m"
+    description: |
+      Duration that temporary, upload-only credentials issued by the server remain valid
+      for cloud storage backends (s3, gcs, azure, swift) during `livepatch-admin patch
+      upload` (optional; defaults to "15m"). Has no effect for filesystem and postgres,
+      which route uploads through the authenticated server API. Admin-tool-facilitated
+      patch upload is not yet supported for ibm and oracle. Note that GCS issues bearer
+      tokens with a cloud-enforced fixed duration of ~1 hour regardless of this setting.
     type: string
   patch-cache.enabled:
     default: false
@@ -625,12 +670,29 @@ options:
     default: ""
   patch-sync.sync-tiers:
     description: >-
-      Mirror patch tier information from the upstream server.
+      Whether to mirror the upstream tier structure and patch-to-tier assignments
+      locally instead of synchronising a single tier. Enabling this removes existing
+      local tiers and disables local tier management. When enabled,
+      patch-sync.upstream-tier and patch-sync.ingress-tier are ignored.
       WARNING: Enabling this feature will modify existing
       tier information in order to match the upstream server's
       tier structure. Avoid this if you already have tiers setup.
     type: boolean
     default: false
+  patch-sync.upstream-tier:
+    default: "stable"
+    description: |
+      The tier requested from the upstream server when patch-sync.sync-tiers is false;
+      defaults to "stable" when unset. For on-premises upstream servers, the sync token
+      may restrict the tier that can be retrieved.
+    type: string
+  patch-sync.ingress-tier:
+    default: ""
+    description: |
+      The local tier into which synced patches are stored and served. Only used when
+      patch-sync.sync-tiers is false; defaults to the first locally configured tier
+      (for example "edge" or "stable") when unset.
+    type: string
   patch-sync.proxy.enabled:
     default: false
     description: Whether or not to proxy patch syncs.
